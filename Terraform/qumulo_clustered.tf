@@ -14,7 +14,7 @@ variable "cluster_config" {
         cluster_name = "Demo"
         cluster_password = "admin"
         node_count = 4
-        instance_type = "m4.2xlarge"
+        instance_type = "m4.16xlarge"
     }
 }
 
