@@ -69,3 +69,6 @@ resource "aws_instance" "qumulo_cluster_head" {
 output "Private IP Address" {
     value = ["${aws_instance.qumulo_cluster_head.private_ip}", "${aws_instance.qumulo_cluster_tail.*.private_ip}"]
 }
+output "Public IP Address" {
+    value = ["${aws_instance.qumulo_cluster_head.public_ip}", "${aws_instance.qumulo_cluster_tail.*.public_ip}"]
+}
