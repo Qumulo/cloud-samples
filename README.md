@@ -1,5 +1,5 @@
 # Qumulo Cloud Deployment Samples
-Samples for deploying Qumulo Core in AWS using popular orchestration technologies
+Samples for deploying Qumulo Core in AWS using popular orchestration technologies.  Right now we have a sample template for Terraform, but please open an issue or PR and we'll add your favorite orechestration technology.  
 
 ## Terraform 
 www.terraform.io  
