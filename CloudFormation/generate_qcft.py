@@ -7,6 +7,7 @@ import troposphere.ec2 as ec2
 # contains the proper configuration to allow those cluster nodes to
 # form a cluster and serve clients.
 # 
+# TODO Replace AMI ID map with the full list of AWS Regions and AMI IDs
 # TODO Launch CloudFormation with the completed CFT. 
 # TODO Recieve input of AWS instance type and region directly into
 #  add_nodes()
