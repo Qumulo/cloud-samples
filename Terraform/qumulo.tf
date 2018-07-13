@@ -82,8 +82,8 @@ data "aws_subnet" "selected" {
 // the ingress and egress sections below to change that. Documentation:
 // https://www.terraform.io/docs/providers/aws/r/security_group.html
 resource "aws_security_group" "allow_all" {
-  name_prefix = "se_demo"
-  description = "Allows all traffic for a sales demo"
+  name_prefix = "qumulo"
+  description = "Allows traffic needed for QF2 to serve clients, management, replication, and clustering."
   vpc_id      = "${data.aws_subnet.selected.vpc_id}"
 
   ingress {
