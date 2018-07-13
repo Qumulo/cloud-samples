@@ -7,6 +7,7 @@ import troposphere.ec2 as ec2
 # contains the proper configuration to allow those cluster nodes to
 # form a cluster and serve clients.
 # 
+# TODO Replace AMI ID map with the full list of AWS Regions and AMI IDs
 # TODO Launch CloudFormation with the completed CFT. 
 # TODO Recieve input of AWS instance type and region directly into
 #  add_nodes()
@@ -79,6 +80,7 @@ def add_secgroup(t):
     sg_in = []
     sg_out = []
 
+    #Ingress TCP ports
     for port in ['21', '80', '111', '443', '445', '2049', '3712', '8000']:
         sg_in.append(ec2.SecurityGroupRule(
                 Description = "TCP ports for NFS, SMB, FTP, Management, and Replication",
@@ -88,6 +90,8 @@ def add_secgroup(t):
                 CidrIp = '0.0.0.0/0'
             )
         )
+
+    #Ingress UDP ports
     for port in ['111', '2049']:
         sg_in.append(ec2.SecurityGroupRule(
                 Description = "UDP ports for NFS",
@@ -98,6 +102,7 @@ def add_secgroup(t):
             )
         )
     
+    #Egress rule for all ports and protocols
     sg_out.append(ec2.SecurityGroupRule(
         Description = "Outbound traffic",
         IpProtocol = '-1',

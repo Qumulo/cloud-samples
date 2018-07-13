@@ -1,0 +1,570 @@
+{
+    "Description": "QF2 for AWS has the highest performance of any file storage system in the public cloud and a complete set of enterprise features, such as support for SMB, real-time visibility into the storage system, directory-based capacity quotas, and snapshots.",
+    "Mappings": {
+        "RegionMap": {
+            "ap-northeast-1": {
+                "AMI": "ami-REPLACE"
+            },
+            "ap-southeast-1": {
+                "AMI": "ami-REPLACE"
+            },
+            "eu-west-1": {
+                "AMI": "ami-REPLACE"
+            },
+            "sa-east-1": {
+                "AMI": "ami-REPLACE"
+            },
+            "us-east-1": {
+                "AMI": "ami-REPLACE"
+            },
+            "us-west-1": {
+                "AMI": "ami-071618db4dece32ec"
+            },
+            "us-west-2": {
+                "AMI": "ami-0a1e10d1617be698d"
+            }
+        }
+    },
+    "Outputs": {
+        "ClusterPrivateIPs": {
+            "Description": "Copy and paste this list into the QF2 Cluster Creation Screen",
+            "Value": {
+                "Fn::Join": [
+                    ", ",
+                    [
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo1",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo2",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo3",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo4",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo5",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo6",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo7",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo8",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo9",
+                                "PrivateIp"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        },
+        "InstanceId": {
+            "Description": "Copy and paste this instance ID into the QF2 Cluster Creation Screen.",
+            "Value": {
+                "Ref": "QuetzalqoatlQumulo1"
+            }
+        },
+        "LinkToManagement": {
+            "Description": "Click to launch the QF2 Admin Console",
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "https://",
+                        {
+                            "Fn::GetAtt": [
+                                "QuetzalqoatlQumulo1",
+                                "PrivateIp"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "InstanceType": {
+            "AllowedValues": [
+                "t2.medium",
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m4.10xlarge",
+                "m4.16xlarge"
+            ],
+            "ConstraintDescription": "Must be a Qumulo supported EC2 instance type.",
+            "Default": "m4.4xlarge",
+            "Description": "EC2 instance type for QF2 node",
+            "Type": "String"
+        },
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the node",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SubnetId": {
+            "ConstraintDescription": "Must be the ID of an existing Subnet.",
+            "Description": "ID of the Subnet in which to deploy QF2.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "VpcId": {
+            "ConstraintDescription": "Must be the ID of an existing VPC.",
+            "Description": "ID of the VPC in which to deploy QF2.",
+            "Type": "AWS::EC2::VPC::Id"
+        }
+    },
+    "Resources": {
+        "QuetzalqoatlQumulo1": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo2": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo3": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo4": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo5": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo6": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo7": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo8": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QuetzalqoatlQumulo9": {
+            "Properties": {
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QumuloSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable ports for NFS/SMB/FTP, Management, Replication, and Clustering.",
+                "SecurityGroupEgress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Outbound traffic",
+                        "FromPort": 0,
+                        "IpProtocol": "-1",
+                        "ToPort": 0
+                    }
+                ],
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "21",
+                        "IpProtocol": "tcp",
+                        "ToPort": "21"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "80",
+                        "IpProtocol": "tcp",
+                        "ToPort": "80"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "111",
+                        "IpProtocol": "tcp",
+                        "ToPort": "111"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "443",
+                        "IpProtocol": "tcp",
+                        "ToPort": "443"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "445",
+                        "IpProtocol": "tcp",
+                        "ToPort": "445"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "2049",
+                        "IpProtocol": "tcp",
+                        "ToPort": "2049"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "3712",
+                        "IpProtocol": "tcp",
+                        "ToPort": "3712"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "8000",
+                        "IpProtocol": "tcp",
+                        "ToPort": "8000"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "UDP ports for NFS",
+                        "FromPort": "111",
+                        "IpProtocol": "udp",
+                        "ToPort": "111"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "UDP ports for NFS",
+                        "FromPort": "2049",
+                        "IpProtocol": "udp",
+                        "ToPort": "2049"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "VpcId"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "QumuloSecurityGroupNodeRule": {
+            "DependsOn": "QumuloSecurityGroup",
+            "Properties": {
+                "Description": "Qumulo Internode Communication",
+                "FromPort": 0,
+                "GroupId": {
+                    "Ref": "QumuloSecurityGroup"
+                },
+                "IpProtocol": "-1",
+                "SourceSecurityGroupId": {
+                    "Ref": "QumuloSecurityGroup"
+                },
+                "ToPort": 0
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        }
+    }
+}
