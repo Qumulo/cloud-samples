@@ -2,6 +2,16 @@ from troposphere import FindInMap, GetAtt, Output
 from troposphere import Parameter, Ref, Template, Join
 import troposphere.ec2 as ec2
 
+# The purpose of this scipt is to generate a AWS CloudFormation Template
+# for QF2 that is pre-configured for a requested number of cluster nodes, and
+# contains the proper configuration to allow those cluster nodes to
+# form a cluster and serve clients.
+# 
+# TODO Launch CloudFormation with the completed CFT. 
+# TODO Recieve input of AWS instance type and region directly into
+#  add_nodes()
+
+
 # add_params() takes a given Template object and adds parameters for SSH keys,
 # allowed AWS node types, VPC, and Subnet ID
 def add_params(t):
@@ -185,4 +195,3 @@ def create_qumulo_cft(nodes, prefix):
 qcft = create_qumulo_cft(9, "Quetzalqoatl")
 print(qcft.to_json())
 
-#TODO Launch CloudFormation with the completed CFT.
