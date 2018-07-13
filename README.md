@@ -10,3 +10,13 @@ www.terraform.io
 the number of nodes in the `cluster_config` variable (4+ nodes only).
 A tfvars file can be used to provide the necessary variables from your
 environment.
+
+## CloudFormation
+https://aws.amazon.com/cloudformation/
+`generate_qcft.py` contains a python script that generates an AWS CloudFormation
+template (CFT) with the desired number of nodes and instance names. The CFT that 
+is generated will contain a preconfigured AWS Security Group that enables the 
+cluster to serve clients as well as opens ports for management, replication, 
+and clustering.
+
+An example of the ouput of this script is provided in the file `qcft.json`.
