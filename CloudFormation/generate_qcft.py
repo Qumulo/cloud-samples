@@ -152,7 +152,7 @@ def add_nodes(t, nodes, prefix):
         output_ips.append(GetAtt(i, "PrivateIp"))
 
     t.add_output(Output(
-        "NodePrivateIPs",
+        "ClusterPrivateIPs",
         Description="Copy and paste this list into the QF2 Cluster Creation Screen",
         Value=Join(", ", output_ips),
     ))
