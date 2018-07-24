@@ -7,10 +7,7 @@ import troposphere.ec2 as ec2
 # contains the proper configuration to allow those cluster nodes to
 # form a cluster and serve clients.
 # 
-# TODO Replace AMI ID map with the full list of AWS Regions and AMI IDs
 # TODO Launch CloudFormation with the completed CFT. 
-# TODO Recieve input of AWS instance type and region directly into
-#  add_nodes()
 
 
 # add_params() takes a given Template object and adds parameters for SSH keys,
@@ -53,21 +50,19 @@ def add_params(t):
             ConstraintDescription="Must be the ID of an existing Subnet.",
     ))
 
-# add_amimap() takes a given Template object and adds the Region to AMI ID map 
-# which is referenced by the add_nodes function. This may ultimately be replaced 
-# by being passed the correct AMI ID directly to add_nodes()
-#
-# TODO Either switch to direct input of AMI ID and AWS region to add_nodes(), or
-# populate this map with the full supported region list and current AMI IDs
-def add_amimap(t):
+# add_amimap() takes a given Template object and AMI ID then creates the Region to AMI ID map 
+# which is referenced by the add_nodes function. 
+def add_amimap(t, amiid):
     t.add_mapping('RegionMap', {
-        "us-east-1":      {"AMI": "ami-REPLACE"},
-        "us-west-1":      {"AMI": "ami-071618db4dece32ec"},
-        "us-west-2":      {"AMI": "ami-0a1e10d1617be698d"},
-        "eu-west-1":      {"AMI": "ami-REPLACE"},
-        "sa-east-1":      {"AMI": "ami-REPLACE"},
-        "ap-southeast-1": {"AMI": "ami-REPLACE"},
-        "ap-northeast-1": {"AMI": "ami-REPLACE"}
+        "us-east-1":      {"AMI": amiid},
+        "us-east-2":      {"AMI": "US-EAST-1-AMI-CLONE"},
+        "us-west-1":      {"AMI": "US-EAST-1-AMI-CLONE"},
+        "us-west-2":      {"AMI": "US-EAST-1-AMI-CLONE"},
+        "ca-central-1":   {"AMI": "US-EAST-1-AMI-CLONE"},
+        "eu-central-1":   {"AMI": "US-EAST-1-AMI-CLONE"},
+        "eu-west-1":      {"AMI": "US-EAST-1-AMI-CLONE"},
+        "eu-west-2":      {"AMI": "US-EAST-1-AMI-CLONE"},
+        "eu-west-3":      {"AMI": "US-EAST-1-AMI-CLONE"}
     })
 
 # add_secgroup() takes a given Template object and adds properly configured AWS
@@ -141,7 +136,7 @@ def add_nodes(t, nodes, prefix):
     nodes_list = []
 
     for x in range(0, nodes):
-        node_name = prefix + "Qumulo" + str((x + 1))
+        node_name = prefix + "Node" + str((x + 1))
         t.add_resource(
             ec2.Instance(
                 node_name,
@@ -182,21 +177,47 @@ def add_nodes(t, nodes, prefix):
         Value=Ref(prefix + "Qumulo1"),
     ))
 
-# create_qumulo_cft() takes a count of nodes to create as well as a prefix for 
-# node names. This function will return a completed Template object fully configured
+# create_qumulo_cft() takes a count of nodes to create, a prefix for node names, and an AMI ID.
+# This function will return a completed Template object fully configured
 # with the number of nodes requested.
-def create_qumulo_cft(nodes, prefix):
+def create_qumulo_cft(nodes, prefix, amiid):
     t = Template()
     t.add_description("QF2 for AWS has the highest performance of any file storage "
         "system in the public cloud and a complete set of enterprise features, such "
         "as support for SMB, real-time visibility into the storage system, "
         "directory-based capacity quotas, and snapshots.")
     add_params(t)
-    add_amimap(t)
+    add_amimap(t, amiid)
     add_secgroup(t)
     add_nodes(t, nodes, prefix)
     return t
 
-qcft = create_qumulo_cft(9, "Quetzalqoatl")
-print(qcft.to_json())
+# write_listing_cfts() takes in a prefix to be used for node/file naming, a suffix for the file
+# name, and an AMI ID for the us-east-1 AMI ID that will be cloned to other regions when the 
+# listing is active. Initially this will create three CFTs: 4, 6, and 10 node clusters.
+def write_listing_cfts(prefix, suffix, amiid):
+    qcft4 = create_qumulo_cft(4, prefix, amiid)
+    qcft6 = create_qumulo_cft(6, prefix, amiid)
+    qcft10 = create_qumulo_cft(10, prefix, amiid)
+
+    f_four_node = open(prefix + "-4Node-" + suffix + ".json", "w")
+    f_four_node.write(qcft4.to_json())
+    f_four_node.close()
+
+    f_six_node = open(prefix + "-6Node-" + suffix + ".json", "w")
+    f_six_node.write(qcft6.to_json())
+    f_six_node.close()
+
+    f_ten_node = open(prefix + "-10Node-" + suffix + ".json", "w")
+    f_ten_node.write(qcft10.to_json())
+    f_ten_node.close()
+
+if __name__ == '__main__':
+    write_listing_cfts("QF2", "5TB", "AMI-ID-US-EAST-1")
+    write_listing_cfts("QF2", "20TB", "AMI-ID-US-EAST-1")
+
+
+
+
+
 
