@@ -174,7 +174,7 @@ def add_nodes(t, nodes, prefix):
     t.add_output(Output(
         "InstanceId",
         Description="Copy and paste this instance ID into the QF2 Cluster Creation Screen.",
-        Value=Ref(prefix + "Qumulo1"),
+        Value=Ref(prefix + "Node1"),
     ))
 
 # create_qumulo_cft() takes a count of nodes to create, a prefix for node names, and an AMI ID.
@@ -213,8 +213,8 @@ def write_listing_cfts(prefix, suffix, amiid):
     f_ten_node.close()
 
 if __name__ == '__main__':
-    write_listing_cfts("QF2", "5TB", "AMI-ID-US-EAST-1")
-    write_listing_cfts("QF2", "20TB", "AMI-ID-US-EAST-1")
+    write_listing_cfts("QF2", "5TB", "AMI-ID-US-EAST-1") #to be replaced with real 5TB AMIID
+    write_listing_cfts("QF2", "20TB", "AMI-ID-US-EAST-1") #to be replaced with real 5TB AMIID
 
 
 
