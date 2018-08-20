@@ -1,0 +1,8 @@
+{
+    "backing_volume_type": "st1",
+    "backing_volume_size": 500,
+    "working_volume_type": "gp2",
+    "working_volume_size": 100,
+    "volume_count": 15,
+    "pairing_ratio": 2
+}
