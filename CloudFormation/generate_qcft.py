@@ -120,6 +120,7 @@ def add_params(template):
         'AdminPassword',
         Description='QF2 administrator account password',
         Type='String',
+        NoEcho=True, # Hide the password
     )
     template.add_parameter(admin_password)
 
