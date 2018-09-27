@@ -30,54 +30,48 @@ SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
 KNOWLEDGE_BASE_LINK = \
     'https://care.qumulo.com/hc/en-us/sections/115003388428-QF2-IN-THE-CLOUD'
 
-class BlockDeviceMappings(object):
-
-    @staticmethod
-    def from_specs(
+class ChassisSpec(object):
+    def __init__(
+            self,
             volume_count,
             pairing_ratio,
             backing_volume_type,
             backing_volume_size,
             working_volume_type,
             working_volume_size):
+
         assert volume_count <= 25, 'Too many volumes specified'
 
-        working_volume_count = volume_count / (pairing_ratio + 1)
-        backing_volume_count = working_volume_count * pairing_ratio
-        assert volume_count == working_volume_count + backing_volume_count, \
+        self.volume_count = volume_count
+        self.pairing_ratio = pairing_ratio
+        self.backing_volume_type = backing_volume_type
+        self.backing_volume_size = backing_volume_size
+        self.working_volume_type = working_volume_type
+        self.working_volume_size = working_volume_size
+
+        self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
+        self.backing_volume_count = \
+            self.working_volume_count * self.pairing_ratio
+        assert self.volume_count == \
+            self.working_volume_count + self.backing_volume_count, \
             'Not all volumes can be used based on the pairing ratio'
-        assert backing_volume_count == 0 or (
-            backing_volume_size is not None and
-            backing_volume_type is not None
+        assert self.backing_volume_count == 0 or (
+            self.backing_volume_size is not None and
+            self.backing_volume_type is not None
         ), 'Backing volumes require type and size'
 
-        if (backing_volume_size is not None):
-            backing_device = ec2.EBSBlockDevice(
-                VolumeType=backing_volume_type,
-                VolumeSize=backing_volume_size,
+        if (self.backing_volume_size is not None):
+            self.backing_device = ec2.EBSBlockDevice(
+                VolumeType=self.backing_volume_type,
+                VolumeSize=self.backing_volume_size,
                 DeleteOnTermination=True,
             )
 
-        working_device = ec2.EBSBlockDevice(
-            VolumeType=working_volume_type,
-            VolumeSize=working_volume_size,
+        self.working_device = ec2.EBSBlockDevice(
+            VolumeType=self.working_volume_type,
+            VolumeSize=self.working_volume_size,
             DeleteOnTermination=True,
         )
-
-        # Create a toposphere mapping for each device
-        mappings = []
-        for i in range(0, volume_count):
-            letter = chr(ord('b') + i)
-            device_name = '/dev/xvd{}'.format(letter)
-            if i < working_volume_count:
-                device = working_device
-            else:
-                device = backing_device
-            mappings.append(ec2.BlockDeviceMapping(
-                DeviceName=device_name, Ebs=device
-            ))
-
-        return mappings
 
     @staticmethod
     def from_json(json_spec):
@@ -89,13 +83,52 @@ class BlockDeviceMappings(object):
         volume_count = json_spec.get('volume_count')
         pairing_ratio = json_spec.get('pairing_ratio')
 
-        return BlockDeviceMappings.from_specs(
+        return ChassisSpec(
             volume_count,
             pairing_ratio,
             backing_type,
             backing_size,
             working_type,
             working_size)
+
+    def _device_name_from_slot_index(self, slot_index):
+        letter = chr(ord('b') + slot_index)
+        return '/dev/xvd{}'.format(letter)
+
+    def get_block_device_mappings(self):
+        '''Create a troposphere mapping for each device'''
+        mappings = []
+        for i in range(0, self.volume_count):
+            device_name = self._device_name_from_slot_index(i)
+
+            if i < self.working_volume_count:
+                device = self.working_device
+            else:
+                device = self.backing_device
+
+            mappings.append(ec2.BlockDeviceMapping(
+                DeviceName=device_name, Ebs=device
+            ))
+
+        return mappings
+
+    def get_slot_specs(self):
+        '''Create a slot spec json object for each device'''
+        slots = []
+        for i in range(0, self.volume_count):
+            device_name = self._device_name_from_slot_index(i)
+
+            if i < self.working_volume_count:
+                disk_role = 'working'
+            else:
+                disk_role = 'backing'
+
+            slots.append({
+                'drive_bay': device_name,
+                'disk_role': disk_role
+            })
+
+        return {'slot_specs': slots}
 
 class Interface(AWSAttribute):
     dictname = 'AWS::CloudFormation::Interface'
@@ -115,14 +148,6 @@ def add_params(template):
         Type='String',
     )
     template.add_parameter(cluster_name)
-
-    admin_password = Parameter(
-        'AdminPassword',
-        Description='QF2 administrator account password',
-        Type='String',
-        NoEcho=True, # Hide the password
-    )
-    template.add_parameter(admin_password)
 
     key_name = Parameter(
         'KeyName',
@@ -183,7 +208,7 @@ def add_params(template):
             },
             {
                 'Label': {'default': 'QF2 Configuration'},
-                'Parameters': [cluster_name.title, admin_password.title, ]
+                'Parameters': [cluster_name.title, ]
             }
         ],
         ParameterLabels={
@@ -191,8 +216,7 @@ def add_params(template):
             key_name.title: {'default': 'SSH key-pair name'},
             vpc_id.title: {'default': 'VPC ID'},
             subnet_id.title: {'default': 'Subnet ID in the VPC'},
-            cluster_name.title: {'default': 'QF2 cluster name'},
-            admin_password.title: {'default': 'QF2 administrator password'}
+            cluster_name.title: {'default': 'QF2 cluster name'}
         }
     ))
 
@@ -328,7 +352,8 @@ def generate_cluster_script(instances):
         'echo Creating QF2 cluster...\n',
         '/opt/qumulo/cli/qq cluster_create --accept-eula '
         '--cluster-name ', Ref('ClusterName'),
-        ' --admin-password ', Ref('AdminPassword'),
+        ' --admin-password '
+            '$(curl http://169.254.169.254/latest/meta-data/instance-id) ',
         ' --host-instance-id '
             '$(curl http://169.254.169.254/latest/meta-data/instance-id) ',
         ' --node-ips '
@@ -347,7 +372,7 @@ def generate_cluster_script(instances):
 
     return Base64(Join('', script))
 
-def add_nodes(template, num_nodes, prefix, block_device_mappings):
+def add_nodes(template, num_nodes, prefix, chassis_spec):
     '''
     Takes a given Template object, an count of nodes to create, and a name to
     prefix all EC2 instances with. EC2 instances will be created with the
@@ -364,6 +389,8 @@ def add_nodes(template, num_nodes, prefix, block_device_mappings):
             SubnetId=Ref('SubnetId'),
         )
     ]
+
+    block_device_mappings = chassis_spec.get_block_device_mappings()
 
     for i in range(1, num_nodes + 1):
         instance = ec2.Instance(
@@ -390,8 +417,15 @@ def add_nodes(template, num_nodes, prefix, block_device_mappings):
     template.add_output(Output(
         'ClusterPrivateIPs',
         Description=
-            'Copy and paste this list into the QF2 Cluster Creation Screen',
+            'List of the private IPs of the nodes in your QF2 Cluster',
         Value=Join(', ', output_ips),
+    ))
+    template.add_output(Output(
+        'TemporaryPassword',
+        Description=
+            'Temporary admin password for your QF2 cluster '
+                '(matches node1 instance ID)',
+        Value=Ref(instances[0].title),
     ))
     template.add_output(Output(
         'LinkToManagement',
@@ -401,19 +435,12 @@ def add_nodes(template, num_nodes, prefix, block_device_mappings):
             ['https://', GetAtt(instances[0].title, 'PrivateIp')]),
     ))
     template.add_output(Output(
-        'InstanceId',
-        Description=
-            'Copy and paste this instance ID into the QF2 Cluster Creation '
-            'Screen.',
-        Value=Ref(instances[0].title),
-    ))
-    template.add_output(Output(
         'QumuloKnowledgeBase',
         Description='Qumulo Knowledge Base for QF2 in public clouds',
         Value=KNOWLEDGE_BASE_LINK
     ))
 
-def create_qumulo_cft(num_nodes, prefix, ami_id, block_device_mappings):
+def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
     '''
     Takes a count of nodes to create, a prefix for node names, and an AMI ID.
     This function will return a completed Template object fully configured with
@@ -428,7 +455,7 @@ def create_qumulo_cft(num_nodes, prefix, ami_id, block_device_mappings):
     add_params(template)
     add_ami_map(template, ami_id)
     add_security_group(template)
-    add_nodes(template, num_nodes, prefix, block_device_mappings)
+    add_nodes(template, num_nodes, prefix, chassis_spec)
     return template
 
 def parse_args(argv):
@@ -459,12 +486,13 @@ def parse_args(argv):
 def main(argv):
     options = parse_args(argv)
     num_nodes = options.num_nodes
-    config_json = json.load(open(options.config_file))
+
+    with open(options.config_file) as json_file:
+        json_spec = json.load(json_file)
+
+    chassis_spec = ChassisSpec.from_json(json_spec)
     cf_template = create_qumulo_cft(
-        num_nodes,
-        'QF2',
-        options.ami_id,
-        BlockDeviceMappings.from_json(config_json))
+        num_nodes, 'QF2', options.ami_id, chassis_spec)
     print cf_template.to_json()
 
 if __name__ == '__main__':
