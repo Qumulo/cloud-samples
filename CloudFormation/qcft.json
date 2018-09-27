@@ -57,15 +57,11 @@
                         "default": "QF2 Configuration"
                     },
                     "Parameters": [
-                        "ClusterName",
-                        "AdminPassword"
+                        "ClusterName"
                     ]
                 }
             ],
             "ParameterLabels": {
-                "AdminPassword": {
-                    "default": "QF2 administrator password"
-                },
                 "ClusterName": {
                     "default": "QF2 cluster name"
                 },
@@ -86,7 +82,7 @@
     },
     "Outputs": {
         "ClusterPrivateIPs": {
-            "Description": "Copy and paste this list into the QF2 Cluster Creation Screen",
+            "Description": "List of the private IPs of the nodes in your QF2 Cluster",
             "Value": {
                 "Fn::Join": [
                     ", ",
@@ -119,12 +115,6 @@
                 ]
             }
         },
-        "InstanceId": {
-            "Description": "Copy and paste this instance ID into the QF2 Cluster Creation Screen.",
-            "Value": {
-                "Ref": "QF2Node1"
-            }
-        },
         "LinkToManagement": {
             "Description": "Click to launch the QF2 Admin Console",
             "Value": {
@@ -145,13 +135,15 @@
         "QumuloKnowledgeBase": {
             "Description": "Qumulo Knowledge Base for QF2 in public clouds",
             "Value": "https://care.qumulo.com/hc/en-us/sections/115003388428-QF2-IN-THE-CLOUD"
+        },
+        "TemporaryPassword": {
+            "Description": "Temporary admin password for your QF2 cluster (matches node1 instance ID)",
+            "Value": {
+                "Ref": "QF2Node1"
+            }
         }
     },
     "Parameters": {
-        "AdminPassword": {
-            "Description": "QF2 administrator account password",
-            "Type": "String"
-        },
         "ClusterName": {
             "Description": "QF2 cluster name",
             "Type": "String"
@@ -400,10 +392,7 @@
                                 {
                                     "Ref": "ClusterName"
                                 },
-                                " --admin-password ",
-                                {
-                                    "Ref": "AdminPassword"
-                                },
+                                " --admin-password $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
                                 " --host-instance-id $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
                                 " --node-ips $(curl http://169.254.169.254/latest/meta-data/local-ipv4)",
                                 " ",
