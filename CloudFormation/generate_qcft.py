@@ -27,8 +27,8 @@ from troposphere import (
 # NOTE: Use only public packages.
 
 SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
-KNOWLEDGE_BASE_LINK = \
-    'https://care.qumulo.com/hc/en-us/sections/115003388428-QF2-IN-THE-CLOUD'
+KNOWLEDGE_BASE_LINK = 'https://qf2.co/cloud-kb'
+CLUSTER_NAME_PATTERN = r'^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
 
 class ChassisSpec(object):
     def __init__(
@@ -144,8 +144,14 @@ def add_params(template):
     '''
     cluster_name = Parameter(
         'ClusterName',
-        Description='QF2 cluster name',
+        Description='QF2 cluster name (2-15 alpha-numeric characters and -)',
         Type='String',
+        MinLength=2,
+        MaxLength=15,
+        AllowedPattern=CLUSTER_NAME_PATTERN,
+        ConstraintDescription=
+            'Name must be an alpha-numeric string between 2 and 15 characters. '
+            'Dash (-) is allowed if not the first or last character.',
     )
     template.add_parameter(cluster_name)
 
@@ -303,74 +309,46 @@ def add_security_group(template):
         SourceSecurityGroupId = Ref(SECURITY_GROUP_NAME)
     ))
 
-def generate_cluster_script(instances):
+def format_slot_specs(slot_specs_json):
+    return json.dumps(slot_specs_json, indent=4).split('\n')
 
-    script = []
+def generate_node1_user_data(
+        instances, chassis_spec, get_ip_ref=None, cluster_name_ref=None):
 
-    script_header = [
-        '#!/bin/bash\n',
-        '\n',
-        'set -ex\n',
-        'export HOME=/home/admin\n',
-        '\n',
-    ]
-    script += script_header
+    if get_ip_ref is None:
+        get_ip_ref = lambda instance_name: GetAtt(instance_name, 'PrivateIp')
 
-    wait_for_qfsd_on_node_one = [
-        'echo Waiting for qumulo-qfsd.service start up on {}...\n'.format(
-            instances[0].title),
-        'while ! /opt/qumulo/cli/qq unconfigured_nodes_list > /dev/null 2>&1 ; '
-            'do sleep 1 ; done\n',
-        'echo qumulo-qfsd.server started on {}.\n'.format(instances[0].title),
-        '\n',
-    ]
-    script += wait_for_qfsd_on_node_one
+    if cluster_name_ref is None:
+        cluster_name_ref = Ref('ClusterName')
+
+    user_data = ['{', '"spec_info": ']
+    user_data += format_slot_specs(chassis_spec.get_slot_specs())
+    user_data[-1] += ','
+
+    user_data_node_ips = ['"node_ips": [']
 
     for instance in instances[1:]:
-        wait_for_qfsd = [
-            'echo Waiting for qumulo-qfsd.service start up on {}...\n'.format(
-                instance.title),
-            'while ! /opt/qumulo/cli/qq '
-                '--host ', GetAtt(instance.title, 'PrivateIp'),
-                ' unconfigured_nodes_list > /dev/null 2>&1 ; '
-            'do sleep 1 ; done\n',
-            'echo qumulo-qfsd.server started on {}.\n'.format(instance.title),
-            '\n',
-        ]
-        script += wait_for_qfsd
+        ip = get_ip_ref(instance.title)
+        user_data_node_ips += ['"', ip, '", ']
 
-    wait_for_metadata_service = [
-        'echo Waiting for EC2 instance metadata service start up...\n',
-        'while ! curl http://169.254.169.254/latest/meta-data/instance-id > '
-            '/dev/null 2>&1 ; do sleep 1 ; done\n',
-        'echo EC2 instance metadata service started.\n',
-        '\n',
-    ]
-    script += wait_for_metadata_service
+    user_data_node_ips[-1] = '"],'
 
-    create_cluster = [
-        'echo Creating QF2 cluster...\n',
-        '/opt/qumulo/cli/qq cluster_create --accept-eula '
-        '--cluster-name ', Ref('ClusterName'),
-        ' --admin-password '
-            '$(curl http://169.254.169.254/latest/meta-data/instance-id) ',
-        ' --host-instance-id '
-            '$(curl http://169.254.169.254/latest/meta-data/instance-id) ',
-        ' --node-ips '
-            '$(curl http://169.254.169.254/latest/meta-data/local-ipv4)',
+    user_data += user_data_node_ips
+
+    user_data += ['"cluster_name": "', cluster_name_ref, '" }']
+
+    return user_data
+
+def generate_other_nodes_user_data(chassis_spec):
+    user_data = [
+        '{',
+        '"spec_info": ',
     ]
 
-    for instance in instances[1:]:
-        create_cluster += [ ' ', GetAtt(instance.title, 'PrivateIp') ]
+    user_data += format_slot_specs(chassis_spec.get_slot_specs())
+    user_data.append('}')
 
-    create_cluster += [
-        '\n',
-        'echo QF2 cluster created.\n',
-        '\n'
-    ]
-    script += create_cluster
-
-    return Base64(Join('', script))
+    return user_data
 
 def add_nodes(template, num_nodes, prefix, chassis_spec):
     '''
@@ -391,7 +369,6 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
     ]
 
     block_device_mappings = chassis_spec.get_block_device_mappings()
-
     for i in range(1, num_nodes + 1):
         instance = ec2.Instance(
             '{}Node{}'.format(prefix, i),
@@ -404,7 +381,12 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
 
         instances.append(instance)
 
-    instances[0].UserData = generate_cluster_script(instances)
+    instances[0].UserData = Base64(
+        Join('', generate_node1_user_data(instances, chassis_spec)))
+
+    for instance in instances[1:]:
+        instance.UserData = Base64(
+            Join('', generate_other_nodes_user_data(chassis_spec)))
 
     for instance in instances:
         template.add_resource(instance)

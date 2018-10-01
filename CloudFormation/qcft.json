@@ -134,7 +134,7 @@
         },
         "QumuloKnowledgeBase": {
             "Description": "Qumulo Knowledge Base for QF2 in public clouds",
-            "Value": "https://care.qumulo.com/hc/en-us/sections/115003388428-QF2-IN-THE-CLOUD"
+            "Value": "https://qf2.co/cloud-kb"
         },
         "TemporaryPassword": {
             "Description": "Temporary admin password for your QF2 cluster (matches node1 instance ID)",
@@ -145,7 +145,11 @@
     },
     "Parameters": {
         "ClusterName": {
-            "Description": "QF2 cluster name",
+            "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$",
+            "ConstraintDescription": "Name must be an alpha-numeric string between 2 and 15 characters. Dash (-) is allowed if not the first or last character.",
+            "Description": "QF2 cluster name (2-15 alpha-numeric characters and -)",
+            "MaxLength": 15,
+            "MinLength": 2,
             "Type": "String"
         },
         "InstanceType": {
@@ -341,84 +345,102 @@
                         "Fn::Join": [
                             "",
                             [
-                                "#!/bin/bash\n",
-                                "\n",
-                                "set -ex\n",
-                                "export HOME=/home/admin\n",
-                                "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node1...\n",
-                                "while ! /opt/qumulo/cli/qq unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node1.\n",
-                                "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node2...\n",
-                                "while ! /opt/qumulo/cli/qq --host ",
+                                "{",
+                                "\"spec_info\": ",
+                                "{",
+                                "    \"slot_specs\": [",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdb\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdc\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdd\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvde\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdf\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdg\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdh\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdi\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdj\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdk\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdl\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdm\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdn\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdo\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdp\"",
+                                "        }",
+                                "    ]",
+                                "},",
+                                "\"node_ips\": [",
+                                "\"",
                                 {
                                     "Fn::GetAtt": [
                                         "QF2Node2",
                                         "PrivateIp"
                                     ]
                                 },
-                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node2.\n",
-                                "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node3...\n",
-                                "while ! /opt/qumulo/cli/qq --host ",
+                                "\", ",
+                                "\"",
                                 {
                                     "Fn::GetAtt": [
                                         "QF2Node3",
                                         "PrivateIp"
                                     ]
                                 },
-                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node3.\n",
-                                "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node4...\n",
-                                "while ! /opt/qumulo/cli/qq --host ",
+                                "\", ",
+                                "\"",
                                 {
                                     "Fn::GetAtt": [
                                         "QF2Node4",
                                         "PrivateIp"
                                     ]
                                 },
-                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node4.\n",
-                                "\n",
-                                "echo Waiting for EC2 instance metadata service start up...\n",
-                                "while ! curl http://169.254.169.254/latest/meta-data/instance-id > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo EC2 instance metadata service started.\n",
-                                "\n",
-                                "echo Creating QF2 cluster...\n",
-                                "/opt/qumulo/cli/qq cluster_create --accept-eula --cluster-name ",
+                                "\"],",
+                                "\"cluster_name\": \"",
                                 {
                                     "Ref": "ClusterName"
                                 },
-                                " --admin-password $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
-                                " --host-instance-id $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
-                                " --node-ips $(curl http://169.254.169.254/latest/meta-data/local-ipv4)",
-                                " ",
-                                {
-                                    "Fn::GetAtt": [
-                                        "QF2Node2",
-                                        "PrivateIp"
-                                    ]
-                                },
-                                " ",
-                                {
-                                    "Fn::GetAtt": [
-                                        "QF2Node3",
-                                        "PrivateIp"
-                                    ]
-                                },
-                                " ",
-                                {
-                                    "Fn::GetAtt": [
-                                        "QF2Node4",
-                                        "PrivateIp"
-                                    ]
-                                },
-                                "\n",
-                                "echo QF2 cluster created.\n",
-                                "\n"
+                                "\" }"
                             ]
                         ]
                     }
@@ -579,7 +601,83 @@
                             "Ref": "SubnetId"
                         }
                     }
-                ]
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "{",
+                                "\"spec_info\": ",
+                                "{",
+                                "    \"slot_specs\": [",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdb\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdc\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdd\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvde\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdf\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdg\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdh\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdi\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdj\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdk\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdl\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdm\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdn\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdo\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdp\"",
+                                "        }",
+                                "    ]",
+                                "}",
+                                "}"
+                            ]
+                        ]
+                    }
+                }
             },
             "Type": "AWS::EC2::Instance"
         },
@@ -736,7 +834,83 @@
                             "Ref": "SubnetId"
                         }
                     }
-                ]
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "{",
+                                "\"spec_info\": ",
+                                "{",
+                                "    \"slot_specs\": [",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdb\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdc\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdd\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvde\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdf\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdg\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdh\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdi\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdj\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdk\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdl\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdm\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdn\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdo\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdp\"",
+                                "        }",
+                                "    ]",
+                                "}",
+                                "}"
+                            ]
+                        ]
+                    }
+                }
             },
             "Type": "AWS::EC2::Instance"
         },
@@ -893,7 +1067,83 @@
                             "Ref": "SubnetId"
                         }
                     }
-                ]
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "{",
+                                "\"spec_info\": ",
+                                "{",
+                                "    \"slot_specs\": [",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdb\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdc\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdd\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvde\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"working\", ",
+                                "            \"drive_bay\": \"/dev/xvdf\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdg\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdh\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdi\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdj\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdk\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdl\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdm\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdn\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdo\"",
+                                "        }, ",
+                                "        {",
+                                "            \"disk_role\": \"backing\", ",
+                                "            \"drive_bay\": \"/dev/xvdp\"",
+                                "        }",
+                                "    ]",
+                                "}",
+                                "}"
+                            ]
+                        ]
+                    }
+                }
             },
             "Type": "AWS::EC2::Instance"
         },
