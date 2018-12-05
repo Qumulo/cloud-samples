@@ -29,6 +29,7 @@ from troposphere import (
 SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
 KNOWLEDGE_BASE_LINK = 'https://qf2.co/cloud-kb'
 CLUSTER_NAME_PATTERN = r'^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
+GIBIBYTE = 1024 ** 3
 
 class ChassisSpec(object):
     def __init__(
@@ -120,12 +121,15 @@ class ChassisSpec(object):
 
             if i < self.working_volume_count:
                 disk_role = 'working'
+                disk_size = self.working_volume_size * GIBIBYTE
             else:
                 disk_role = 'backing'
+                disk_size = self.backing_volume_size * GIBIBYTE
 
             slots.append({
                 'drive_bay': device_name,
-                'disk_role': disk_role
+                'disk_role': disk_role,
+                'disk_size': disk_size,
             })
 
         return {'slot_specs': slots}
@@ -406,8 +410,8 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
         'TemporaryPassword',
         Description=
             'Temporary admin password for your QF2 cluster '
-                '(matches node1 instance ID)',
-        Value=Ref(instances[0].title),
+                '(exclude quotes, matches node1 instance ID).',
+        Value=Join('', ['"', Ref(instances[0].title), '"'])
     ))
     template.add_output(Output(
         'LinkToManagement',
