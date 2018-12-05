@@ -12,5 +12,3 @@ template (CFT) with the desired number of nodes and instance names. The CFT that
 is generated will contain a preconfigured AWS Security Group that enables the
 cluster to serve clients as well as opens ports for management, replication,
 and clustering.
-
-An example of the ouput of this script is provided in the file `qcft.json`.
