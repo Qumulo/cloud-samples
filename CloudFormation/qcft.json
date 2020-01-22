@@ -1,0 +1,1011 @@
+{
+    "Description": "QF2 for AWS has the highest performance of any file storage system in the public cloud and a complete set of enterprise features, such as support for SMB, real-time visibility into the storage system, directory-based capacity quotas, and snapshots.",
+    "Mappings": {
+        "RegionMap": {
+            "ca-central-1": {
+                "AMI": "REPLACE_ME"
+            },
+            "eu-central-1": {
+                "AMI": "REPLACE_ME"
+            },
+            "eu-west-1": {
+                "AMI": "REPLACE_ME"
+            },
+            "eu-west-2": {
+                "AMI": "REPLACE_ME"
+            },
+            "eu-west-3": {
+                "AMI": "REPLACE_ME"
+            },
+            "us-east-1": {
+                "AMI": "REPLACE_ME"
+            },
+            "us-east-2": {
+                "AMI": "REPLACE_ME"
+            },
+            "us-west-1": {
+                "AMI": "REPLACE_ME"
+            },
+            "us-west-2": {
+                "AMI": "REPLACE_ME"
+            }
+        }
+    },
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Amazon EC2 Configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "KeyName"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcId",
+                        "SubnetId"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "QF2 Configuration"
+                    },
+                    "Parameters": [
+                        "ClusterName"
+                    ]
+                }
+            ],
+            "ParameterLabels": {
+                "ClusterName": {
+                    "default": "QF2 cluster name"
+                },
+                "InstanceType": {
+                    "default": "EC2 instance type"
+                },
+                "KeyName": {
+                    "default": "SSH key-pair name"
+                },
+                "SubnetId": {
+                    "default": "Subnet ID in the VPC"
+                },
+                "VpcId": {
+                    "default": "VPC ID"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "ClusterPrivateIPs": {
+            "Description": "List of the private IPs of the nodes in your QF2 Cluster",
+            "Value": {
+                "Fn::Join": [
+                    ", ",
+                    [
+                        {
+                            "Fn::GetAtt": [
+                                "QF2Node1",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QF2Node2",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QF2Node3",
+                                "PrivateIp"
+                            ]
+                        },
+                        {
+                            "Fn::GetAtt": [
+                                "QF2Node4",
+                                "PrivateIp"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        },
+        "LinkToManagement": {
+            "Description": "Click to launch the QF2 Admin Console",
+            "Value": {
+                "Fn::Join": [
+                    "",
+                    [
+                        "https://",
+                        {
+                            "Fn::GetAtt": [
+                                "QF2Node1",
+                                "PrivateIp"
+                            ]
+                        }
+                    ]
+                ]
+            }
+        },
+        "QumuloKnowledgeBase": {
+            "Description": "Qumulo Knowledge Base for QF2 in public clouds",
+            "Value": "https://qf2.co/cloud-kb"
+        },
+        "TemporaryPassword": {
+            "Description": "Temporary admin password for your QF2 cluster (matches node1 instance ID)",
+            "Value": {
+                "Ref": "QF2Node1"
+            }
+        }
+    },
+    "Parameters": {
+        "ClusterName": {
+            "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$",
+            "ConstraintDescription": "Name must be an alpha-numeric string between 2 and 15 characters. Dash (-) is allowed if not the first or last character.",
+            "Description": "QF2 cluster name (2-15 alpha-numeric characters and -)",
+            "MaxLength": 15,
+            "MinLength": 2,
+            "Type": "String"
+        },
+        "InstanceType": {
+            "AllowedValues": [
+                "m4.xlarge",
+                "m4.2xlarge",
+                "m4.4xlarge",
+                "m4.10xlarge",
+                "m4.16xlarge",
+                "m5.xlarge",
+                "m5.2xlarge",
+                "m5.4xlarge",
+                "m5.12xlarge",
+                "m5.24xlarge"
+            ],
+            "ConstraintDescription": "Must be a Qumulo supported EC2 instance type.",
+            "Default": "m4.4xlarge",
+            "Description": "EC2 instance type for QF2 node",
+            "Type": "String"
+        },
+        "KeyName": {
+            "Description": "Name of an existing EC2 KeyPair to enable SSH access to the node",
+            "Type": "AWS::EC2::KeyPair::KeyName"
+        },
+        "SubnetId": {
+            "ConstraintDescription": "Must be the ID of an existing Subnet.",
+            "Description": "ID of the Subnet in which to deploy QF2.",
+            "Type": "AWS::EC2::Subnet::Id"
+        },
+        "VpcId": {
+            "ConstraintDescription": "Must be the ID of an existing VPC.",
+            "Description": "ID of the VPC in which to deploy QF2.",
+            "Type": "AWS::EC2::VPC::Id"
+        }
+    },
+    "Resources": {
+        "QF2Node1": {
+            "Properties": {
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdb",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdc",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdd",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvde",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdf",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdg",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdh",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdi",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdj",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdk",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdl",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdm",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdn",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdo",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdp",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ],
+                "UserData": {
+                    "Fn::Base64": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "#!/bin/bash\n",
+                                "\n",
+                                "set -ex\n",
+                                "export HOME=/home/admin\n",
+                                "\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QF2Node1...\n",
+                                "while ! /opt/qumulo/cli/qq unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
+                                "echo qumulo-qfsd.server started on QF2Node1.\n",
+                                "\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QF2Node2...\n",
+                                "while ! /opt/qumulo/cli/qq --host ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node2",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
+                                "echo qumulo-qfsd.server started on QF2Node2.\n",
+                                "\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QF2Node3...\n",
+                                "while ! /opt/qumulo/cli/qq --host ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node3",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
+                                "echo qumulo-qfsd.server started on QF2Node3.\n",
+                                "\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QF2Node4...\n",
+                                "while ! /opt/qumulo/cli/qq --host ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node4",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
+                                "echo qumulo-qfsd.server started on QF2Node4.\n",
+                                "\n",
+                                "echo Waiting for EC2 instance metadata service start up...\n",
+                                "while ! curl http://169.254.169.254/latest/meta-data/instance-id > /dev/null 2>&1 ; do sleep 1 ; done\n",
+                                "echo EC2 instance metadata service started.\n",
+                                "\n",
+                                "echo Creating QF2 cluster...\n",
+                                "/opt/qumulo/cli/qq cluster_create --accept-eula --cluster-name ",
+                                {
+                                    "Ref": "ClusterName"
+                                },
+                                " --admin-password $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
+                                " --host-instance-id $(curl http://169.254.169.254/latest/meta-data/instance-id) ",
+                                " --node-ips $(curl http://169.254.169.254/latest/meta-data/local-ipv4)",
+                                " ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node2",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                " ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node3",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                " ",
+                                {
+                                    "Fn::GetAtt": [
+                                        "QF2Node4",
+                                        "PrivateIp"
+                                    ]
+                                },
+                                "\n",
+                                "echo QF2 cluster created.\n",
+                                "\n"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QF2Node2": {
+            "Properties": {
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdb",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdc",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdd",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvde",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdf",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdg",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdh",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdi",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdj",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdk",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdl",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdm",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdn",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdo",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdp",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QF2Node3": {
+            "Properties": {
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdb",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdc",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdd",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvde",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdf",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdg",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdh",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdi",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdj",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdk",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdl",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdm",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdn",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdo",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdp",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QF2Node4": {
+            "Properties": {
+                "BlockDeviceMappings": [
+                    {
+                        "DeviceName": "/dev/xvdb",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdc",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdd",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvde",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdf",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 100,
+                            "VolumeType": "gp2"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdg",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdh",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdi",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdj",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdk",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdl",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdm",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdn",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdo",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    },
+                    {
+                        "DeviceName": "/dev/xvdp",
+                        "Ebs": {
+                            "DeleteOnTermination": "true",
+                            "VolumeSize": 500,
+                            "VolumeType": "st1"
+                        }
+                    }
+                ],
+                "ImageId": {
+                    "Fn::FindInMap": [
+                        "RegionMap",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "AMI"
+                    ]
+                },
+                "InstanceType": {
+                    "Ref": "InstanceType"
+                },
+                "KeyName": {
+                    "Ref": "KeyName"
+                },
+                "NetworkInterfaces": [
+                    {
+                        "AssociatePublicIpAddress": "false",
+                        "DeleteOnTermination": "true",
+                        "DeviceIndex": 0,
+                        "GroupSet": [
+                            {
+                                "Ref": "QumuloSecurityGroup"
+                            }
+                        ],
+                        "SubnetId": {
+                            "Ref": "SubnetId"
+                        }
+                    }
+                ]
+            },
+            "Type": "AWS::EC2::Instance"
+        },
+        "QumuloSecurityGroup": {
+            "Properties": {
+                "GroupDescription": "Enable ports for NFS/SMB/FTP, Management, Replication, and Clustering.",
+                "SecurityGroupEgress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Outbound traffic",
+                        "FromPort": 0,
+                        "IpProtocol": "-1",
+                        "ToPort": 0
+                    }
+                ],
+                "SecurityGroupIngress": [
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "21",
+                        "IpProtocol": "tcp",
+                        "ToPort": "21"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "80",
+                        "IpProtocol": "tcp",
+                        "ToPort": "80"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "111",
+                        "IpProtocol": "tcp",
+                        "ToPort": "111"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "443",
+                        "IpProtocol": "tcp",
+                        "ToPort": "443"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "445",
+                        "IpProtocol": "tcp",
+                        "ToPort": "445"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "2049",
+                        "IpProtocol": "tcp",
+                        "ToPort": "2049"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "3712",
+                        "IpProtocol": "tcp",
+                        "ToPort": "3712"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "TCP ports for NFS, SMB, FTP, Management, and Replication",
+                        "FromPort": "8000",
+                        "IpProtocol": "tcp",
+                        "ToPort": "8000"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "UDP ports for NFS",
+                        "FromPort": "111",
+                        "IpProtocol": "udp",
+                        "ToPort": "111"
+                    },
+                    {
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "UDP ports for NFS",
+                        "FromPort": "2049",
+                        "IpProtocol": "udp",
+                        "ToPort": "2049"
+                    }
+                ],
+                "VpcId": {
+                    "Ref": "VpcId"
+                }
+            },
+            "Type": "AWS::EC2::SecurityGroup"
+        },
+        "QumuloSecurityGroupNodeRule": {
+            "DependsOn": "QumuloSecurityGroup",
+            "Properties": {
+                "Description": "Qumulo Internode Communication",
+                "FromPort": 0,
+                "GroupId": {
+                    "Ref": "QumuloSecurityGroup"
+                },
+                "IpProtocol": "-1",
+                "SourceSecurityGroupId": {
+                    "Ref": "QumuloSecurityGroup"
+                },
+                "ToPort": 0
+            },
+            "Type": "AWS::EC2::SecurityGroupIngress"
+        }
+    }
+}

@@ -6,6 +6,10 @@
 # information or intellectual property contained herein is strictly forbidden,
 # unless separate prior written permission has been obtained from Qumulo, Inc.
 
+# XXX: Sort imports and remove `pylint: disable=imports-must-be-sorted`
+# The `--sort-py-imports` option for `lint/pycheck --auto-fix` may be helpful.
+# pylint: disable=imports-must-be-sorted
+
 # derived from AWS Secrets Manager Rotation Lambda Template on GitHub at
 # https://github.com/aws-samples/aws-secrets-manager-rotation-lambdas/
 

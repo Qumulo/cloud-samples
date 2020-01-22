@@ -6,6 +6,10 @@
 # information or intellectual property contained herein is strictly forbidden,
 # unless separate prior written permission has been obtained from Qumulo, Inc.
 
+# XXX: Sort imports and remove `pylint: disable=imports-must-be-sorted`
+# The `--sort-py-imports` option for `lint/pycheck --auto-fix` may be helpful.
+# pylint: disable=imports-must-be-sorted
+
 '''
 The purpose of this scipt is to generate a AWS CloudFormation Template
 for QF2 that is pre-configured for a requested number of cluster nodes, and
@@ -20,8 +24,19 @@ import json
 import sys
 
 from troposphere import (
-    AWSAttribute, Base64, FindInMap, GetAtt, Output, Parameter, Ref, Template,
-    Join, ec2
+    AWSAttribute,
+    Base64,
+    Equals,
+    FindInMap,
+    GetAtt,
+    If,
+    Join,
+    Not,
+    Output,
+    Parameter,
+    Ref,
+    Template,
+    ec2
 )
 
 # NOTE: Use only public packages.
@@ -61,17 +76,27 @@ class ChassisSpec(object):
             self.backing_volume_type is not None
         ), 'Backing volumes require type and size'
 
-        if (self.backing_volume_size is not None):
+        if self.backing_volume_size is not None:
             self.backing_device = ec2.EBSBlockDevice(
                 VolumeType=self.backing_volume_type,
                 VolumeSize=self.backing_volume_size,
                 DeleteOnTermination=True,
+                Encrypted=If('IsEncrypted', 'true', 'false'),
+                KmsKeyId=If(
+                    'HasEncryptionKey',
+                    Ref('VolumesEncryptionKey'),
+                    Ref('AWS::NoValue')),
             )
 
         self.working_device = ec2.EBSBlockDevice(
             VolumeType=self.working_volume_type,
             VolumeSize=self.working_volume_size,
             DeleteOnTermination=True,
+            Encrypted=If('IsEncrypted', 'true', 'false'),
+            KmsKeyId=If(
+                'HasEncryptionKey',
+                Ref('VolumesEncryptionKey'),
+                Ref('AWS::NoValue')),
         )
 
     @staticmethod
@@ -98,7 +123,15 @@ class ChassisSpec(object):
 
     def get_block_device_mappings(self):
         '''Create a troposphere mapping for each device'''
-        mappings = []
+        mappings = [
+            ec2.BlockDeviceMapping(
+                DeviceName='/dev/sda1',
+                Ebs=ec2.EBSBlockDevice(
+                    Encrypted=If('IsEncrypted', 'true', 'false'),
+                    KmsKeyId=If(
+                        'HasEncryptionKey',
+                        Ref('VolumesEncryptionKey'),
+                        Ref('AWS::NoValue'))))]
         for i in range(0, self.volume_count):
             device_name = self._device_name_from_slot_index(i)
 
@@ -142,6 +175,15 @@ class Interface(AWSAttribute):
         'ParameterLabels': (dict, True),
     }
 
+def add_conditions(template):
+    '''
+    Add IsEncrypted and HasEncryptionKey conditions to the template.
+    '''
+    template.add_condition(
+        'IsEncrypted', Equals(Ref('VolumesEncrypted'), 'enabled'))
+    template.add_condition(
+        'HasEncryptionKey', Not(Equals(Ref('VolumesEncryptionKey'), '')))
+
 def add_params(template):
     '''
     Takes a given Template object and adds parameters for user configuration
@@ -182,8 +224,15 @@ def add_params(template):
             'm5.xlarge',
             'm5.2xlarge',
             'm5.4xlarge',
+            'm5.8xlarge',
             'm5.12xlarge',
+            'm5.16xlarge',
             'm5.24xlarge',
+            'c5n.xlarge',
+            'c5n.2xlarge',
+            'c5n.4xlarge',
+            'c5n.9xlarge',
+            'c5n.18xlarge',
         ],
         ConstraintDescription=
             'Must be a Qumulo supported EC2 instance type.',
@@ -206,11 +255,36 @@ def add_params(template):
     )
     template.add_parameter(subnet_id)
 
+    volumes_encrypted = Parameter(
+        'VolumesEncrypted',
+        Type='String',
+        AllowedValues=['enabled', 'disabled'],
+        Default='enabled')
+    template.add_parameter(volumes_encrypted)
+
+    volumes_encryption_key = Parameter(
+        'VolumesEncryptionKey',
+        Type='String',
+        Default='',
+        Description=(
+            'The KMS Key to encrypt the volumes. Use either a key ID, ARN, or '
+            'an Alias. Aliases must begin with alias/ followed by the name, '
+            'such as alias/exampleKey. If empty, the default KMS EBS key will '
+            'be used. Choosing an invalid key name will cause the instance to '
+            'fail to launch.'),
+        ConstraintDescription=(
+            'Must be the ID, or ARN of an existing KMS key'))
+    template.add_parameter(volumes_encryption_key)
+
     template.add_metadata(Interface(
         ParameterGroups=[
             {
                 'Label': {'default': 'Amazon EC2 Configuration'},
-                'Parameters': [instance_type.title, key_name.title, ]
+                'Parameters': [
+                    instance_type.title,
+                    key_name.title,
+                    volumes_encrypted.title,
+                    volumes_encryption_key.title]
             },
             {
                 'Label': {'default': 'Network Configuration'},
@@ -226,7 +300,10 @@ def add_params(template):
             key_name.title: {'default': 'SSH key-pair name'},
             vpc_id.title: {'default': 'VPC ID'},
             subnet_id.title: {'default': 'Subnet ID in the VPC'},
-            cluster_name.title: {'default': 'QF2 cluster name'}
+            cluster_name.title: {'default': 'QF2 cluster name'},
+            volumes_encrypted.title: {'default': 'Encrypt EBS volumes'},
+            volumes_encryption_key.title: {
+                'default': 'EBS volumes encryption key ID'}
         }
     ))
 
@@ -247,7 +324,7 @@ def add_ami_map(template, ami_id):
         'eu-west-3': {'AMI': ami_id}
     })
 
-def add_security_group(template):
+def add_security_group(template, sg_cidr):
     '''
     Takes a given Template object and adds properly configured AWS
     security group to enable QF2 to cluster, replicate, and serve clients.
@@ -267,7 +344,7 @@ def add_security_group(template):
             IpProtocol = 'tcp',
             FromPort = port,
             ToPort = port,
-            CidrIp = '0.0.0.0/0'
+            CidrIp = sg_cidr
         ))
 
     # Ingress UDP ports
@@ -277,7 +354,7 @@ def add_security_group(template):
             IpProtocol = 'udp',
             FromPort = port,
             ToPort = port,
-            CidrIp = '0.0.0.0/0'
+            CidrIp = sg_cidr
         ))
 
     # Egress rule for all ports and protocols
@@ -286,7 +363,7 @@ def add_security_group(template):
         IpProtocol = '-1',
         FromPort = 0,
         ToPort = 0,
-        CidrIp = '0.0.0.0/0'
+        CidrIp = sg_cidr
     ))
 
     template.add_resource(ec2.SecurityGroup(
@@ -381,6 +458,7 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
             KeyName=Ref('KeyName'),
             NetworkInterfaces=network_interfaces,
             BlockDeviceMappings=block_device_mappings,
+            EbsOptimized=True,
         )
 
         instances.append(instance)
@@ -415,7 +493,7 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
     ))
     template.add_output(Output(
         'LinkToManagement',
-        Description='Click to launch the QF2 Admin Console',
+        Description='Use to launch the QF2 Admin Console',
         Value=Join(
             '',
             ['https://', GetAtt(instances[0].title, 'PrivateIp')]),
@@ -426,7 +504,7 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
         Value=KNOWLEDGE_BASE_LINK
     ))
 
-def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
+def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec, sg_cidr):
     '''
     Takes a count of nodes to create, a prefix for node names, and an AMI ID.
     This function will return a completed Template object fully configured with
@@ -438,9 +516,10 @@ def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
         'in the public cloud and a complete set of enterprise features, such '
         'as support for SMB, real-time visibility into the storage system, '
         'directory-based capacity quotas, and snapshots.')
+    add_conditions(template)
     add_params(template)
     add_ami_map(template, ami_id)
-    add_security_group(template)
+    add_security_group(template, sg_cidr)
     add_nodes(template, num_nodes, prefix, chassis_spec)
     return template
 
@@ -467,6 +546,12 @@ def parse_args(argv):
         required=True,
         help='AMI ID in deployment region')
 
+    parser.add_argument(
+        '--sg-cidr',
+        type=str,
+        default='0.0.0.0/0',
+        help='Ingress/Egress CIDR for security group')
+
     return parser.parse_args(argv)
 
 def main(argv):
@@ -478,7 +563,7 @@ def main(argv):
 
     chassis_spec = ChassisSpec.from_json(json_spec)
     cf_template = create_qumulo_cft(
-        num_nodes, 'QF2', options.ami_id, chassis_spec)
+        num_nodes, 'QF2', options.ami_id, chassis_spec, options.sg_cidr)
     print cf_template.to_json()
 
 if __name__ == '__main__':
