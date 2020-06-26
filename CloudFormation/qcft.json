@@ -1,5 +1,5 @@
 {
-    "Description": "QF2 for AWS has the highest performance of any file storage system in the public cloud and a complete set of enterprise features, such as support for SMB, real-time visibility into the storage system, directory-based capacity quotas, and snapshots.",
+    "Description": "Qumulo for AWS has the highest performance of any file storage system in the public cloud and a complete set of enterprise features, such as support for SMB, real-time visibility into the storage system, directory-based capacity quotas, and snapshots.",
     "Mappings": {
         "RegionMap": {
             "ca-central-1": {
@@ -54,7 +54,7 @@
                 },
                 {
                     "Label": {
-                        "default": "QF2 Configuration"
+                        "default": "Qumulo Configuration"
                     },
                     "Parameters": [
                         "ClusterName"
@@ -63,7 +63,7 @@
             ],
             "ParameterLabels": {
                 "ClusterName": {
-                    "default": "QF2 cluster name"
+                    "default": "Qumulo cluster name"
                 },
                 "InstanceType": {
                     "default": "EC2 instance type"
@@ -82,32 +82,32 @@
     },
     "Outputs": {
         "ClusterPrivateIPs": {
-            "Description": "List of the private IPs of the nodes in your QF2 Cluster",
+            "Description": "List of the private IPs of the nodes in your Qumulo Cluster",
             "Value": {
                 "Fn::Join": [
                     ", ",
                     [
                         {
                             "Fn::GetAtt": [
-                                "QF2Node1",
+                                "QumuloNode1",
                                 "PrivateIp"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "QF2Node2",
+                                "QumuloNode2",
                                 "PrivateIp"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "QF2Node3",
+                                "QumuloNode3",
                                 "PrivateIp"
                             ]
                         },
                         {
                             "Fn::GetAtt": [
-                                "QF2Node4",
+                                "QumuloNode4",
                                 "PrivateIp"
                             ]
                         }
@@ -116,7 +116,7 @@
             }
         },
         "LinkToManagement": {
-            "Description": "Click to launch the QF2 Admin Console",
+            "Description": "Click to launch the Qumulo Admin Console",
             "Value": {
                 "Fn::Join": [
                     "",
@@ -124,7 +124,7 @@
                         "https://",
                         {
                             "Fn::GetAtt": [
-                                "QF2Node1",
+                                "QumuloNode1",
                                 "PrivateIp"
                             ]
                         }
@@ -133,13 +133,13 @@
             }
         },
         "QumuloKnowledgeBase": {
-            "Description": "Qumulo Knowledge Base for QF2 in public clouds",
+            "Description": "Knowledge Base for Qumulo in public clouds",
             "Value": "https://qf2.co/cloud-kb"
         },
         "TemporaryPassword": {
-            "Description": "Temporary admin password for your QF2 cluster (matches node1 instance ID)",
+            "Description": "Temporary admin password for your Qumulo cluster (matches node1 instance ID)",
             "Value": {
-                "Ref": "QF2Node1"
+                "Ref": "QumuloNode1"
             }
         }
     },
@@ -147,7 +147,7 @@
         "ClusterName": {
             "AllowedPattern": "^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$",
             "ConstraintDescription": "Name must be an alpha-numeric string between 2 and 15 characters. Dash (-) is allowed if not the first or last character.",
-            "Description": "QF2 cluster name (2-15 alpha-numeric characters and -)",
+            "Description": "Qumulo cluster name (2-15 alpha-numeric characters and -)",
             "MaxLength": 15,
             "MinLength": 2,
             "Type": "String"
@@ -167,7 +167,7 @@
             ],
             "ConstraintDescription": "Must be a Qumulo supported EC2 instance type.",
             "Default": "m4.4xlarge",
-            "Description": "EC2 instance type for QF2 node",
+            "Description": "EC2 instance type for Qumulo node",
             "Type": "String"
         },
         "KeyName": {
@@ -176,17 +176,17 @@
         },
         "SubnetId": {
             "ConstraintDescription": "Must be the ID of an existing Subnet.",
-            "Description": "ID of the Subnet in which to deploy QF2.",
+            "Description": "ID of the Subnet in which to deploy Qumulo.",
             "Type": "AWS::EC2::Subnet::Id"
         },
         "VpcId": {
             "ConstraintDescription": "Must be the ID of an existing VPC.",
-            "Description": "ID of the VPC in which to deploy QF2.",
+            "Description": "ID of the VPC in which to deploy Qumulo.",
             "Type": "AWS::EC2::VPC::Id"
         }
     },
     "Resources": {
-        "QF2Node1": {
+        "QumuloNode1": {
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -350,48 +350,48 @@
                                 "set -ex\n",
                                 "export HOME=/home/admin\n",
                                 "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node1...\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QumuloNode1...\n",
                                 "while ! /opt/qumulo/cli/qq unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node1.\n",
+                                "echo qumulo-qfsd.server started on QumuloNode1.\n",
                                 "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node2...\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QumuloNode2...\n",
                                 "while ! /opt/qumulo/cli/qq --host ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node2",
+                                        "QumuloNode2",
                                         "PrivateIp"
                                     ]
                                 },
                                 " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node2.\n",
+                                "echo qumulo-qfsd.server started on QumuloNode2.\n",
                                 "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node3...\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QumuloNode3...\n",
                                 "while ! /opt/qumulo/cli/qq --host ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node3",
+                                        "QumuloNode3",
                                         "PrivateIp"
                                     ]
                                 },
                                 " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node3.\n",
+                                "echo qumulo-qfsd.server started on QumuloNode3.\n",
                                 "\n",
-                                "echo Waiting for qumulo-qfsd.service start up on QF2Node4...\n",
+                                "echo Waiting for qumulo-qfsd.service start up on QumuloNode4...\n",
                                 "while ! /opt/qumulo/cli/qq --host ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node4",
+                                        "QumuloNode4",
                                         "PrivateIp"
                                     ]
                                 },
                                 " unconfigured_nodes_list > /dev/null 2>&1 ; do sleep 1 ; done\n",
-                                "echo qumulo-qfsd.server started on QF2Node4.\n",
+                                "echo qumulo-qfsd.server started on QumuloNode4.\n",
                                 "\n",
                                 "echo Waiting for EC2 instance metadata service start up...\n",
                                 "while ! curl http://169.254.169.254/latest/meta-data/instance-id > /dev/null 2>&1 ; do sleep 1 ; done\n",
                                 "echo EC2 instance metadata service started.\n",
                                 "\n",
-                                "echo Creating QF2 cluster...\n",
+                                "echo Creating Qumulo cluster...\n",
                                 "/opt/qumulo/cli/qq cluster_create --accept-eula --cluster-name ",
                                 {
                                     "Ref": "ClusterName"
@@ -402,26 +402,26 @@
                                 " ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node2",
+                                        "QumuloNode2",
                                         "PrivateIp"
                                     ]
                                 },
                                 " ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node3",
+                                        "QumuloNode3",
                                         "PrivateIp"
                                     ]
                                 },
                                 " ",
                                 {
                                     "Fn::GetAtt": [
-                                        "QF2Node4",
+                                        "QumuloNode4",
                                         "PrivateIp"
                                     ]
                                 },
                                 "\n",
-                                "echo QF2 cluster created.\n",
+                                "echo Qumulo cluster created.\n",
                                 "\n"
                             ]
                         ]
@@ -430,7 +430,7 @@
             },
             "Type": "AWS::EC2::Instance"
         },
-        "QF2Node2": {
+        "QumuloNode2": {
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -587,7 +587,7 @@
             },
             "Type": "AWS::EC2::Instance"
         },
-        "QF2Node3": {
+        "QumuloNode3": {
             "Properties": {
                 "BlockDeviceMappings": [
                     {
@@ -744,7 +744,7 @@
             },
             "Type": "AWS::EC2::Instance"
         },
-        "QF2Node4": {
+        "QumuloNode4": {
             "Properties": {
                 "BlockDeviceMappings": [
                     {
