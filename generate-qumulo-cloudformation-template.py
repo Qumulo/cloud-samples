@@ -1,17 +1,35 @@
 #!/usr/bin/env python3
-# Copyright (c) 2018 Qumulo, Inc. All rights reserved.
+# MIT License
 #
-# NOTICE: All information and intellectual property contained herein is the
-# confidential property of Qumulo, Inc. Reproduction or dissemination of the
-# information or intellectual property contained herein is strictly forbidden,
-# unless separate prior written permission has been obtained from Qumulo, Inc.
+# Copyright (c) 2018 Qumulo
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 
 # qumulo_python_versions = { 3 }
+# mypy: ignore-errors
+
 """
-The purpose of this scipt is to generate a AWS CloudFormation Template
-for Qumulo that is pre-configured for a requested number of cluster nodes, and
-contains the proper configuration to allow those cluster nodes to
-form a cluster and serve clients. Writes the CFT to stdout.
+The purpose of this script is to generate a AWS CloudFormation Template for Qumulo that
+is pre-configured for a requested number of cluster nodes, and contains the proper
+configuration to allow those cluster nodes to form a cluster and serve clients.
+
+Writes the CFT to stdout.
 """
 
 import argparse
@@ -79,7 +97,7 @@ class ChassisSpec:
                 VolumeType=self.backing_volume_type,
                 VolumeSize=self.backing_volume_size,
                 DeleteOnTermination=True,
-                Encrypted=If('IsEncrypted', 'true', 'false'),
+                Encrypted=True,
                 KmsKeyId=If(
                     'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
                 ),
@@ -89,7 +107,7 @@ class ChassisSpec:
             VolumeType=self.working_volume_type,
             VolumeSize=self.working_volume_size,
             DeleteOnTermination=True,
-            Encrypted=If('IsEncrypted', 'true', 'false'),
+            Encrypted=True,
             KmsKeyId=If(
                 'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
             ),
@@ -124,7 +142,7 @@ class ChassisSpec:
             ec2.BlockDeviceMapping(
                 DeviceName='/dev/sda1',
                 Ebs=ec2.EBSBlockDevice(
-                    Encrypted=If('IsEncrypted', 'true', 'false'),
+                    Encrypted=True,
                     KmsKeyId=If(
                         'HasEncryptionKey',
                         Ref('VolumesEncryptionKey'),
@@ -180,9 +198,8 @@ class Interface(AWSAttribute):
 
 def add_conditions(template):
     """
-    Add IsEncrypted, HasEncryptionKey, and HasInstanceRecoveryTopic conditions to the template.
+    Add HasEncryptionKey, and HasInstanceRecoveryTopic conditions to the template.
     """
-    template.add_condition('IsEncrypted', Equals(Ref('VolumesEncrypted'), 'enabled'))
     template.add_condition(
         'HasEncryptionKey', Not(Equals(Ref('VolumesEncryptionKey'), ''))
     )
@@ -202,8 +219,8 @@ def add_params(template):
         MinLength=2,
         MaxLength=15,
         AllowedPattern=CLUSTER_NAME_PATTERN,
-        ConstraintDescription='Name must be an alpha-numeric string between 2 and 15 characters. '
-        'Dash (-) is allowed if not the first or last character.',
+        ConstraintDescription='Name must be an alpha-numeric string between 2 and 15'
+        ' characters. Dash (-) is allowed if not the first or last character.',
     )
     template.add_parameter(cluster_name)
 
@@ -219,13 +236,8 @@ def add_params(template):
         'InstanceType',
         Description='EC2 instance type for Qumulo node',
         Type='String',
-        Default='m4.4xlarge',
+        Default='m5.4xlarge',
         AllowedValues=[
-            'm4.xlarge',
-            'm4.2xlarge',
-            'm4.4xlarge',
-            'm4.10xlarge',
-            'm4.16xlarge',
             'm5.xlarge',
             'm5.2xlarge',
             'm5.4xlarge',
@@ -259,14 +271,6 @@ def add_params(template):
     )
     template.add_parameter(subnet_id)
 
-    volumes_encrypted = Parameter(
-        'VolumesEncrypted',
-        Type='String',
-        AllowedValues=['enabled', 'disabled'],
-        Default='enabled',
-    )
-    template.add_parameter(volumes_encrypted)
-
     volumes_encryption_key = Parameter(
         'VolumesEncryptionKey',
         Type='String',
@@ -287,7 +291,8 @@ def add_params(template):
         Type='String',
         Default='',
         Description=(
-            'Optionally enter an SNS topic that receives messages when an instance alarm is triggered.'
+            'Optionally enter an SNS topic that receives messages when an instance '
+            'alarm is triggered.'
         ),
         ConstraintDescription=('Must be an ARN'),
     )
@@ -301,7 +306,6 @@ def add_params(template):
                     'Parameters': [
                         instance_type.title,
                         key_name.title,
-                        volumes_encrypted.title,
                         volumes_encryption_key.title,
                     ],
                 },
@@ -324,7 +328,6 @@ def add_params(template):
                 vpc_id.title: {'default': 'VPC ID'},
                 subnet_id.title: {'default': 'Subnet ID in the VPC'},
                 cluster_name.title: {'default': 'Qumulo cluster name'},
-                volumes_encrypted.title: {'default': 'Encrypt EBS volumes'},
                 volumes_encryption_key.title: {
                     'default': 'EBS volumes encryption key ID'
                 },
@@ -359,11 +362,13 @@ def add_ami_map(template, ami_id):
 
 def add_security_group(template, sg_cidr):
     """
-    Takes a given Template object and adds properly configured AWS
-    security group to enable Qumulo to cluster, replicate, and serve clients.
+    Takes a given Template object and adds properly configured AWS security group to
+    enable Qumulo to cluster, replicate, and serve clients.
+
     Ports enabled by default:
     TCP 21, 80, 111, 443, 445, 2049, 3712, 8000
     UDP 111, 2049
+
     All traffic is allowed between members of the security group for clustering.
     """
     sg_in = []
@@ -407,8 +412,8 @@ def add_security_group(template, sg_cidr):
     template.add_resource(
         ec2.SecurityGroup(
             SECURITY_GROUP_NAME,
-            GroupDescription='Enable ports for NFS/SMB/FTP, Management, Replication, and '
-            'Clustering.',
+            GroupDescription='Enable ports for NFS/SMB/FTP, Management, Replication, '
+            'and Clustering.',
             SecurityGroupIngress=sg_in,
             SecurityGroupEgress=sg_out,
             VpcId=Ref('VpcId'),
