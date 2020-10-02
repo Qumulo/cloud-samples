@@ -20,7 +20,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# qumulo_python_versions = { 2 }
+# qumulo_python_versions = { 3 }
 
 # derived from AWS Secrets Manager Rotation Lambda Template on GitHub at
 # https://github.com/aws-samples/aws-secrets-manager-rotation-lambdas/
@@ -28,6 +28,8 @@
 import json
 import logging
 import os
+
+from typing import Any, Dict, Optional
 
 import boto3
 
@@ -37,7 +39,7 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
-def lambda_handler(event, _context):
+def lambda_handler(event: Dict[str, str], _context: Any) -> None:
     """Qumulo Secrets Manager Rotation Template
 
     This is a sample for creating a AWS Secrets Manager rotation lambda
@@ -120,7 +122,7 @@ def lambda_handler(event, _context):
         raise ValueError('Invalid step parameter')
 
 
-def create_secret(service_client, arn, token):
+def create_secret(service_client: Any, arn: str, token: str) -> None:
     """Create the secret
 
     This method first checks for the existence of a secret for the passed in
@@ -165,7 +167,7 @@ def create_secret(service_client, arn, token):
         )
 
 
-def set_secret(service_client, arn, token):
+def set_secret(service_client: Any, arn: str, token: str) -> None:
     """Set the secret
 
     This method sets the Qumulo cluster's admin password to the secret.
@@ -222,7 +224,7 @@ def set_secret(service_client, arn, token):
     )
 
 
-def test_secret(service_client, arn, token):
+def test_secret(service_client: Any, arn: str, token: str) -> None:
     """Test the secret
 
     This method validates that the user can login to the Qumulo cluster with the
@@ -260,7 +262,7 @@ def test_secret(service_client, arn, token):
         )
 
 
-def finish_secret(service_client, arn, token):
+def finish_secret(service_client: Any, arn: str, token: str) -> None:
     """Finish the secret
 
     This method finalizes the rotation process by marking the secret version
@@ -306,7 +308,7 @@ def finish_secret(service_client, arn, token):
     )
 
 
-def get_connection(secret_dict):
+def get_connection(secret_dict: Dict[str, str]) -> Optional[Any]:
     """
     Create Qumulo REST client. Return None if unable to log into the cluster.
     """
@@ -320,7 +322,9 @@ def get_connection(secret_dict):
         return None
 
 
-def get_secret_dict(service_client, arn, stage, token=None):
+def get_secret_dict(
+    service_client: Any, arn: str, stage: str, token: str = None
+) -> Dict[str, str]:
     """Gets the secret dictionary corresponding for the secret arn, stage, and
     token
 
