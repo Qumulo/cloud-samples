@@ -64,49 +64,38 @@ GIBIBYTE = 1024 ** 3
 
 class ChassisSpec:
     def __init__(
-        self,
-        volume_count,
-        pairing_ratio,
-        backing_volume_type,
-        backing_volume_size,
-        working_volume_type,
-        working_volume_size,
+        self, volume_count, pairing_ratio, working_spec, backing_spec,
     ):
 
         assert volume_count <= 25, 'Too many volumes specified'
 
         self.volume_count = volume_count
         self.pairing_ratio = pairing_ratio
-        self.backing_volume_type = backing_volume_type
-        self.backing_volume_size = backing_volume_size
-        self.working_volume_type = working_volume_type
-        self.working_volume_size = working_volume_size
+        self.working_spec = working_spec
+        self.backing_spec = backing_spec
 
         self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
         self.backing_volume_count = self.working_volume_count * self.pairing_ratio
         assert (
             self.volume_count == self.working_volume_count + self.backing_volume_count
         ), 'Not all volumes can be used based on the pairing ratio'
-        assert self.backing_volume_count == 0 or (
-            self.backing_volume_size is not None
-            and self.backing_volume_type is not None
+        assert (
+            self.backing_volume_count == 0 or self.backing_spec is not None
         ), 'Backing volumes require type and size'
 
-        if self.backing_volume_size is not None:
+        if self.backing_spec is not None:
+            self.backing_volume_size = self.backing_spec['VolumeSize']
             self.backing_device = ec2.EBSBlockDevice(
-                VolumeType=self.backing_volume_type,
-                VolumeSize=self.backing_volume_size,
-                DeleteOnTermination=True,
+                **self.backing_spec,
                 Encrypted=True,
                 KmsKeyId=If(
                     'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
                 ),
             )
 
+        self.working_volume_size = self.working_spec['VolumeSize']
         self.working_device = ec2.EBSBlockDevice(
-            VolumeType=self.working_volume_type,
-            VolumeSize=self.working_volume_size,
-            DeleteOnTermination=True,
+            **self.working_spec,
             Encrypted=True,
             KmsKeyId=If(
                 'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
@@ -116,20 +105,11 @@ class ChassisSpec:
     @staticmethod
     def from_json(json_spec):
         # Backing disks will not be specified in AF configurations
-        backing_type = json_spec.get('backing_volume_type', None)
-        backing_size = json_spec.get('backing_volume_size', None)
-        working_type = json_spec.get('working_volume_type')
-        working_size = json_spec.get('working_volume_size')
-        volume_count = json_spec.get('volume_count')
-        pairing_ratio = json_spec.get('pairing_ratio')
-
         return ChassisSpec(
-            volume_count,
-            pairing_ratio,
-            backing_type,
-            backing_size,
-            working_type,
-            working_size,
+            json_spec.get('slot_count'),
+            json_spec.get('pairing_ratio'),
+            json_spec.get('working_spec'),
+            json_spec.get('backing_spec'),
         )
 
     def _device_name_from_slot_index(self, slot_index):
@@ -630,6 +610,13 @@ def parse_args(argv):
     )
 
     parser.add_argument(
+        '--backing-volume-type-override',
+        type=str,
+        choices=['sc1', 'st1', 'gp2'],
+        help='Override type of EBS volumes for backing storage.',
+    )
+
+    parser.add_argument(
         '--ami-id', type=str, required=True, help='AMI ID in deployment region'
     )
 
@@ -643,12 +630,28 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
+class NoBackingVolumesException(Exception):
+    pass
+
+
+def override_backing_type(json_spec, new_type):
+    if json_spec.get('backing_spec') is None:
+        raise NoBackingVolumesException(
+            "The backing volumes' type cannot be set because there are no "
+            'backing volumes in the specified config.'
+        )
+    json_spec['backing_spec']['VolumeType'] = new_type
+
+
 def main(argv):
     options = parse_args(argv)
     num_nodes = options.num_nodes
 
     with open(options.config_file) as json_file:
         json_spec = json.load(json_file)
+
+    if options.backing_volume_type_override is not None:
+        override_backing_type(json_spec, options.backing_volume_type_override)
 
     chassis_spec = ChassisSpec.from_json(json_spec)
     cf_template = create_qumulo_cft(
