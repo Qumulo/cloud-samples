@@ -34,7 +34,10 @@ Writes the CFT to stdout.
 
 import argparse
 import json
+import os
 import sys
+
+os.environ['TROPO_REAL_BOOL'] = 'true'
 
 from troposphere import (
     AWSAttribute,
@@ -57,8 +60,16 @@ from troposphere import (
 # NOTE: Use only public packages.
 
 SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
+SECURITY_GROUP_DEFAULT_CIDR = '0.0.0.0/0'
 KNOWLEDGE_BASE_LINK = 'https://qf2.co/cloud-kb'
 CLUSTER_NAME_PATTERN = r'^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
+CIDR_PATTERN = (
+    r'^('
+    '([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}'  # (0-255).(0-255).(0-255).
+    '([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])'  # (0-255)
+    '(\/(3[0-2]|[1-2][0-9]|[0-9])'  # /(0-32)
+    ')$'
+)
 GIBIBYTE = 1024 ** 3
 
 
@@ -251,6 +262,18 @@ def add_params(template):
     )
     template.add_parameter(subnet_id)
 
+    sg_cidr = Parameter(
+        'SgCidr',
+        Description='An IPv4 CIDR block for specifying the generated security '
+        "group's allowed addresses for inbound traffic.",
+        Type='String',
+        Default=SECURITY_GROUP_DEFAULT_CIDR,
+        AllowedPattern=CIDR_PATTERN,
+        ConstraintDescription='Must be specified as an IPv4 address followed '
+        'by / and a subnet mask of 0-32.',
+    )
+    template.add_parameter(sg_cidr)
+
     volumes_encryption_key = Parameter(
         'VolumesEncryptionKey',
         Type='String',
@@ -291,7 +314,7 @@ def add_params(template):
                 },
                 {
                     'Label': {'default': 'Network Configuration'},
-                    'Parameters': [vpc_id.title, subnet_id.title,],
+                    'Parameters': [vpc_id.title, subnet_id.title, sg_cidr.title],
                 },
                 {
                     'Label': {'default': 'Qumulo Configuration'},
@@ -307,6 +330,7 @@ def add_params(template):
                 key_name.title: {'default': 'SSH key-pair name'},
                 vpc_id.title: {'default': 'VPC ID'},
                 subnet_id.title: {'default': 'Subnet ID in the VPC'},
+                sg_cidr.title: {'default': 'Security group IPv4 CIDR block'},
                 cluster_name.title: {'default': 'Qumulo cluster name'},
                 volumes_encryption_key.title: {
                     'default': 'EBS volumes encryption key ID'
@@ -340,7 +364,7 @@ def add_ami_map(template, ami_id):
     )
 
 
-def add_security_group(template, sg_cidr):
+def add_security_group(template):
     """
     Takes a given Template object and adds properly configured AWS security group to
     enable Qumulo to cluster, replicate, and serve clients.
@@ -355,26 +379,26 @@ def add_security_group(template, sg_cidr):
     sg_out = []
 
     # Ingress TCP ports
-    for port in ['21', '80', '111', '443', '445', '2049', '3712', '8000']:
+    for port in [21, 80, 111, 443, 445, 2049, 3712, 8000]:
         sg_in.append(
             ec2.SecurityGroupRule(
                 Description='TCP ports for NFS, SMB, FTP, Management, and Replication',
                 IpProtocol='tcp',
                 FromPort=port,
                 ToPort=port,
-                CidrIp=sg_cidr,
+                CidrIp=Ref('SgCidr'),
             )
         )
 
     # Ingress UDP ports
-    for port in ['111', '2049']:
+    for port in [111, 2049]:
         sg_in.append(
             ec2.SecurityGroupRule(
                 Description='UDP ports for NFS',
                 IpProtocol='udp',
                 FromPort=port,
                 ToPort=port,
-                CidrIp=sg_cidr,
+                CidrIp=Ref('SgCidr'),
             )
         )
 
@@ -385,7 +409,7 @@ def add_security_group(template, sg_cidr):
             IpProtocol='-1',
             FromPort=0,
             ToPort=0,
-            CidrIp=sg_cidr,
+            CidrIp=SECURITY_GROUP_DEFAULT_CIDR,
         )
     )
 
@@ -406,7 +430,6 @@ def add_security_group(template, sg_cidr):
     template.add_resource(
         ec2.SecurityGroupIngress(
             'QumuloSecurityGroupNodeRule',
-            DependsOn=SECURITY_GROUP_NAME,
             Description='Qumulo Internode Communication',
             GroupId=Ref(SECURITY_GROUP_NAME),
             IpProtocol='-1',
@@ -474,7 +497,7 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
         ec2.NetworkInterfaceProperty(
             AssociatePublicIpAddress=False,
             GroupSet=[Ref(SECURITY_GROUP_NAME)],
-            DeviceIndex=0,
+            DeviceIndex='0',
             DeleteOnTermination=True,
             SubnetId=Ref('SubnetId'),
         )
@@ -572,7 +595,7 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
     )
 
 
-def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec, sg_cidr):
+def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
     """
     Takes a count of nodes to create, a prefix for node names, and an AMI ID.
     This function will return a completed Template object fully configured with
@@ -588,7 +611,7 @@ def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec, sg_cidr):
     add_conditions(template)
     add_params(template)
     add_ami_map(template, ami_id)
-    add_security_group(template, sg_cidr)
+    add_security_group(template)
     add_nodes(template, num_nodes, prefix, chassis_spec)
     return template
 
@@ -620,13 +643,6 @@ def parse_args(argv):
         '--ami-id', type=str, required=True, help='AMI ID in deployment region'
     )
 
-    parser.add_argument(
-        '--sg-cidr',
-        type=str,
-        default='0.0.0.0/0',
-        help='Ingress/Egress CIDR for security group',
-    )
-
     return parser.parse_args(argv)
 
 
@@ -654,9 +670,7 @@ def main(argv):
         override_backing_type(json_spec, options.backing_volume_type_override)
 
     chassis_spec = ChassisSpec.from_json(json_spec)
-    cf_template = create_qumulo_cft(
-        num_nodes, 'Qumulo', options.ami_id, chassis_spec, options.sg_cidr
-    )
+    cf_template = create_qumulo_cft(num_nodes, 'Qumulo', options.ami_id, chassis_spec)
     print(cf_template.to_json())
 
 
