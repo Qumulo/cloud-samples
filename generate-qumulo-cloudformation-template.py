@@ -57,6 +57,7 @@ from troposphere import (
     Template,
 )
 
+
 # NOTE: Use only public packages.
 
 SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
@@ -189,17 +190,20 @@ class Interface(AWSAttribute):
 
 def add_conditions(template):
     """
-    Add HasEncryptionKey, and HasInstanceRecoveryTopic conditions to the template.
+    Add HasEncryptionKey, HasIamInstanceProfile, and HasInstanceRecoveryTopic conditions to the template.
     """
     template.add_condition(
         'HasEncryptionKey', Not(Equals(Ref('VolumesEncryptionKey'), ''))
+    )
+    template.add_condition(
+        'HasIamInstanceProfile', Not(Equals(Ref('IamInstanceProfile'), ''))
     )
     template.add_condition(
         'HasInstanceRecoveryTopic', Not(Equals(Ref('InstanceRecoveryTopic'), ''))
     )
 
 
-def add_params(template):
+def add_params(template, add_ingress_cidr_param):
     """
     Takes a given Template object and adds parameters for user configuration
     """
@@ -262,17 +266,23 @@ def add_params(template):
     )
     template.add_parameter(subnet_id)
 
-    sg_cidr = Parameter(
-        'SgCidr',
-        Description='An IPv4 CIDR block for specifying the generated security '
-        "group's allowed addresses for inbound traffic.",
-        Type='String',
-        Default=SECURITY_GROUP_DEFAULT_CIDR,
-        AllowedPattern=CIDR_PATTERN,
-        ConstraintDescription='Must be specified as an IPv4 address followed '
-        'by / and a subnet mask of 0-32.',
-    )
-    template.add_parameter(sg_cidr)
+    sg_cidr = None
+    if add_ingress_cidr_param:
+        sg_cidr = Parameter(
+            'SgCidr',
+            Description=(
+                'An IPv4 CIDR block for specifying the generated security '
+                "group's allowed addresses for inbound traffic. "
+                'Set to x.x.x.x/32 to allow one specific IP address '
+                'access, 0.0.0.0/0 to allow all IP addresses access, or another '
+                'CIDR range.'
+            ),
+            Type='String',
+            AllowedPattern=CIDR_PATTERN,
+            ConstraintDescription='Must be specified as an IPv4 address followed '
+            'by / and a subnet mask of 0-32.',
+        )
+        template.add_parameter(sg_cidr)
 
     volumes_encryption_key = Parameter(
         'VolumesEncryptionKey',
@@ -285,61 +295,71 @@ def add_params(template):
             'be used. Choosing an invalid key name will cause the instance to '
             'fail to launch.'
         ),
-        ConstraintDescription=('Must be the ID, or ARN of an existing KMS key'),
     )
     template.add_parameter(volumes_encryption_key)
+
+    iam_instance_profile = Parameter(
+        'IamInstanceProfile',
+        Type='String',
+        Default='',
+        Description=(
+            'Optionally enter the name (*not* the ARN) of the IAM instance profile to '
+            'be assigned to each instance in the cluster.'
+        ),
+    )
+    template.add_parameter(iam_instance_profile)
 
     instance_recovery_topic = Parameter(
         'InstanceRecoveryTopic',
         Type='String',
         Default='',
         Description=(
-            'Optionally enter an SNS topic that receives messages when an instance '
-            'alarm is triggered.'
+            'Optionally enter the ARN of an SNS topic that receives messages when an '
+            'instance alarm is triggered.'
         ),
-        ConstraintDescription=('Must be an ARN'),
     )
     template.add_parameter(instance_recovery_topic)
 
-    template.add_metadata(
-        Interface(
-            ParameterGroups=[
-                {
-                    'Label': {'default': 'Amazon EC2 Configuration'},
-                    'Parameters': [
-                        instance_type.title,
-                        key_name.title,
-                        volumes_encryption_key.title,
-                    ],
-                },
-                {
-                    'Label': {'default': 'Network Configuration'},
-                    'Parameters': [vpc_id.title, subnet_id.title, sg_cidr.title],
-                },
-                {
-                    'Label': {'default': 'Qumulo Configuration'},
-                    'Parameters': [cluster_name.title,],
-                },
-                {
-                    'Label': {'default': 'SNS Configuration'},
-                    'Parameters': [instance_recovery_topic.title,],
-                },
+    parameter_groups = [
+        {
+            'Label': {'default': 'Amazon EC2 Configuration'},
+            'Parameters': [
+                instance_type.title,
+                key_name.title,
+                volumes_encryption_key.title,
+                iam_instance_profile.title,
             ],
-            ParameterLabels={
-                instance_type.title: {'default': 'EC2 instance type'},
-                key_name.title: {'default': 'SSH key-pair name'},
-                vpc_id.title: {'default': 'VPC ID'},
-                subnet_id.title: {'default': 'Subnet ID in the VPC'},
-                sg_cidr.title: {'default': 'Security group IPv4 CIDR block'},
-                cluster_name.title: {'default': 'Qumulo cluster name'},
-                volumes_encryption_key.title: {
-                    'default': 'EBS volumes encryption key ID'
-                },
-                instance_recovery_topic.title: {
-                    'default': 'Instance recovery alarm SNS topic'
-                },
-            },
+        },
+        {
+            'Label': {'default': 'Qumulo Configuration'},
+            'Parameters': [cluster_name.title,],
+        },
+        {
+            'Label': {'default': 'SNS Configuration'},
+            'Parameters': [instance_recovery_topic.title,],
+        },
+    ]
+    parameter_labels = {
+        instance_type.title: {'default': 'EC2 instance type'},
+        key_name.title: {'default': 'SSH key-pair name'},
+        vpc_id.title: {'default': 'VPC ID'},
+        subnet_id.title: {'default': 'Subnet ID in the VPC'},
+        cluster_name.title: {'default': 'Qumulo cluster name'},
+        volumes_encryption_key.title: {'default': 'EBS volumes encryption key ID'},
+        instance_recovery_topic.title: {'default': 'Instance recovery alarm SNS topic'},
+        iam_instance_profile.title: {'default': 'IAM Instance Profile',},
+    }
+    if sg_cidr:
+        parameter_groups.append(
+            {
+                'Label': {'default': 'Network Configuration'},
+                'Parameters': [vpc_id.title, subnet_id.title, sg_cidr.title],
+            }
         )
+        parameter_labels[sg_cidr.title] = {'default': 'Security group IPv4 CIDR block'}
+
+    template.add_metadata(
+        Interface(ParameterGroups=parameter_groups, ParameterLabels=parameter_labels,)
     )
 
 
@@ -370,19 +390,31 @@ def add_security_group(template):
     enable Qumulo to cluster, replicate, and serve clients.
 
     Ports enabled by default:
-    TCP 21, 80, 111, 443, 445, 2049, 3712, 8000
+    TCP 21, 22, 80, 111, 443, 445, 2049, 3712, 8000
     UDP 111, 2049
 
     All traffic is allowed between members of the security group for clustering.
     """
+
     sg_in = []
     sg_out = []
 
     # Ingress TCP ports
-    for port in [21, 80, 111, 443, 445, 2049, 3712, 8000]:
+    tcp_ports = [
+        (21, 'FTP'),
+        (22, 'SSH'),
+        (80, 'HTTP'),
+        (111, 'SUNRPC'),
+        (443, 'HTTPS'),
+        (445, 'SMB'),
+        (2049, 'NFS'),
+        (3712, 'Replication'),
+        (8000, 'REST'),
+    ]
+    for port, protocol in tcp_ports:
         sg_in.append(
             ec2.SecurityGroupRule(
-                Description='TCP ports for NFS, SMB, FTP, Management, and Replication',
+                Description='TCP ports for {}'.format(protocol),
                 IpProtocol='tcp',
                 FromPort=port,
                 ToPort=port,
@@ -391,10 +423,11 @@ def add_security_group(template):
         )
 
     # Ingress UDP ports
-    for port in [111, 2049]:
+    udp_ports = [(111, 'SUNRPC'), (2049, 'NFS')]
+    for port, protocol in udp_ports:
         sg_in.append(
             ec2.SecurityGroupRule(
-                Description='UDP ports for NFS',
+                Description='UDP port for {}'.format(protocol),
                 IpProtocol='udp',
                 FromPort=port,
                 ToPort=port,
@@ -416,8 +449,8 @@ def add_security_group(template):
     template.add_resource(
         ec2.SecurityGroup(
             SECURITY_GROUP_NAME,
-            GroupDescription='Enable ports for NFS/SMB/FTP, Management, Replication, '
-            'and Clustering.',
+            GroupDescription='Enable ports for NFS/SMB/FTP/SSH, Management, '
+            'Replication, and Clustering.',
             SecurityGroupIngress=sg_in,
             SecurityGroupEgress=sg_out,
             VpcId=Ref('VpcId'),
@@ -438,6 +471,8 @@ def add_security_group(template):
             SourceSecurityGroupId=Ref(SECURITY_GROUP_NAME),
         )
     )
+
+    return Ref(SECURITY_GROUP_NAME)
 
 
 def format_slot_specs(slot_specs_json):
@@ -485,36 +520,50 @@ def generate_other_nodes_user_data(chassis_spec):
     return user_data
 
 
-def add_nodes(template, num_nodes, prefix, chassis_spec):
+def add_nodes(
+    template, num_nodes, prefix, chassis_spec, secondary_ip_count, security_group
+):
     """
     Takes a given Template object, an count of nodes to create, and a name to
-    prefix all EC2 instances with. EC2 instances will be created with the
-    naming structure of Prefix + Qumulo + NodeNumber.
+    prefix all EC2 instances with.
+
+    EC2 instances will be created with the naming structure of:
+        Prefix + 'Node' + NodeNumber
+    Network interfaces will be created with the naming structure of
+        Prefix + 'Eni' + NodeNumber:
     """
     instances = []
+    enis = []
 
-    network_interfaces = [
-        ec2.NetworkInterfaceProperty(
-            AssociatePublicIpAddress=False,
-            GroupSet=[Ref(SECURITY_GROUP_NAME)],
-            DeviceIndex='0',
-            DeleteOnTermination=True,
-            SubnetId=Ref('SubnetId'),
-        )
-    ]
+    iam_instance_profile = If(
+        'HasIamInstanceProfile', Ref('IamInstanceProfile'), Ref('AWS::NoValue'),
+    )
 
     block_device_mappings = chassis_spec.get_block_device_mappings()
-    for i in range(1, num_nodes + 1):
+    for node_number in range(1, num_nodes + 1):
+        eni = ec2.NetworkInterface(
+            '{}Eni{}'.format(prefix, node_number),
+            GroupSet=[security_group],
+            SubnetId=Ref('SubnetId'),
+            SecondaryPrivateIpAddressCount=secondary_ip_count,
+        )
+        template.add_resource(eni)
+
+        eni_prop = ec2.NetworkInterfaceProperty(
+            DeviceIndex='0', NetworkInterfaceId=Ref(eni.title),
+        )
         instance = ec2.Instance(
-            '{}Node{}'.format(prefix, i),
+            '{}Node{}'.format(prefix, node_number),
             ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'AMI'),
             InstanceType=Ref('InstanceType'),
             KeyName=Ref('KeyName'),
-            NetworkInterfaces=network_interfaces,
+            NetworkInterfaces=[eni_prop],
             BlockDeviceMappings=block_device_mappings,
             EbsOptimized=True,
+            IamInstanceProfile=iam_instance_profile,
         )
 
+        enis.append(eni)
         instances.append(instance)
 
     instances[0].UserData = Base64(
@@ -559,24 +608,35 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
             )
         )
 
-    # Create a list containing the Private IPs of all nodes.
-    output_ips = []
-    for instance in instances:
-        output_ips.append(GetAtt(instance.title, 'PrivateIp'))
+    # Create lists containing the Primary and Secondary Private IPs of all nodes.
+    output_primary_ips = []
+    output_secondary_ips = []
+    for instance, eni in zip(instances, enis):
+        output_primary_ips.append(GetAtt(instance.title, 'PrivateIp'))
+        secondary_ips = GetAtt(eni.title, 'SecondaryPrivateIpAddresses')
+        output_secondary_ips.append(json_format_list_of_strings(secondary_ips))
 
     template.add_output(
         Output(
             'ClusterPrivateIPs',
-            Description='List of the private IPs of the nodes in your Qumulo Cluster',
-            Value=Join(', ', output_ips),
+            Description='List of the primary private IPs of the nodes in your Qumulo Cluster',
+            Value=json_format_list_of_strings(output_primary_ips),
         )
     )
+    if secondary_ip_count > 0:
+        template.add_output(
+            Output(
+                'ClusterSecondaryPrivateIPs',
+                Description='List of the secondary private IPs of the nodes in your Qumulo Cluster',
+                Value=json_format_list(output_secondary_ips),
+            )
+        )
     template.add_output(
         Output(
             'TemporaryPassword',
             Description='Temporary admin password for your Qumulo cluster '
             '(exclude quotes, matches node1 instance ID).',
-            Value=Join('', ['"', Ref(instances[0].title), '"']),
+            Value=json_format_string(Ref(instances[0].title)),
         )
     )
     template.add_output(
@@ -595,9 +655,27 @@ def add_nodes(template, num_nodes, prefix, chassis_spec):
     )
 
 
-def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
+def json_format_string(s):
+    return Join('', ['"', s, '"'])
+
+
+def json_format_list(l):
+    return Join('', ['[', Join(', ', l), ']'])
+
+
+def json_format_list_of_strings(l):
+    return Join('', ['["', Join('", "', l), '"]'])
+
+
+def create_qumulo_cft(
+    num_nodes,
+    node_name_prefix,
+    ami_id,
+    chassis_spec,
+    secondary_ip_count=0,
+    security_group=None,
+):
     """
-    Takes a count of nodes to create, a prefix for node names, and an AMI ID.
     This function will return a completed Template object fully configured with
     the number of nodes requested.
     """
@@ -609,10 +687,20 @@ def create_qumulo_cft(num_nodes, prefix, ami_id, chassis_spec):
         'directory-based capacity quotas, and snapshots.'
     )
     add_conditions(template)
-    add_params(template)
+    add_ingress_cidr_param = security_group is None
+    add_params(template, add_ingress_cidr_param)
     add_ami_map(template, ami_id)
-    add_security_group(template)
-    add_nodes(template, num_nodes, prefix, chassis_spec)
+
+    security_group = security_group or add_security_group(template)
+
+    add_nodes(
+        template,
+        num_nodes,
+        node_name_prefix,
+        chassis_spec,
+        secondary_ip_count,
+        security_group,
+    )
     return template
 
 
@@ -640,6 +728,19 @@ def parse_args(argv):
     )
 
     parser.add_argument(
+        '--secondary-ip-count',
+        type=int,
+        default=0,
+        help='Provision N secondary private IP addresses for each network interface.',
+    )
+
+    parser.add_argument(
+        '--security-group',
+        type=str,
+        help='Specify an existing security group for all network interfaces to use.',
+    )
+
+    parser.add_argument(
         '--ami-id', type=str, required=True, help='AMI ID in deployment region'
     )
 
@@ -659,18 +760,36 @@ def override_backing_type(json_spec, new_type):
     json_spec['backing_spec']['VolumeType'] = new_type
 
 
-def main(argv):
-    options = parse_args(argv)
-    num_nodes = options.num_nodes
-
-    with open(options.config_file) as json_file:
+def generate_qcft(
+    num_nodes,
+    config_file,
+    backing_volume_type_override,
+    ami_id,
+    secondary_ip_count=0,
+    security_group=None,
+):
+    with open(config_file) as json_file:
         json_spec = json.load(json_file)
 
-    if options.backing_volume_type_override is not None:
-        override_backing_type(json_spec, options.backing_volume_type_override)
+    if backing_volume_type_override is not None:
+        override_backing_type(json_spec, backing_volume_type_override)
 
     chassis_spec = ChassisSpec.from_json(json_spec)
-    cf_template = create_qumulo_cft(num_nodes, 'Qumulo', options.ami_id, chassis_spec)
+    return create_qumulo_cft(
+        num_nodes, 'Qumulo', ami_id, chassis_spec, secondary_ip_count, security_group
+    )
+
+
+def main(argv):
+    options = parse_args(argv)
+    cf_template = generate_qcft(
+        options.num_nodes,
+        options.config_file,
+        options.backing_volume_type_override,
+        options.ami_id,
+        options.secondary_ip_count,
+        options.security_group,
+    )
     print(cf_template.to_json())
 
 
