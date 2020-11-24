@@ -495,11 +495,13 @@ def generate_node1_user_data(
 
     user_data_node_ips = ['"node_ips": [']
 
-    for instance in instances[1:]:
+    for i, instance in enumerate(instances[1:]):
+        if i != 0:
+            user_data_node_ips += ', '
         ip = get_ip_ref(instance.title)
-        user_data_node_ips += ['"', ip, '", ']
+        user_data_node_ips += ['"', ip, '"']
 
-    user_data_node_ips[-1] = '"],'
+    user_data_node_ips += '],'
 
     user_data += user_data_node_ips
 
@@ -533,6 +535,7 @@ def add_nodes(
         Prefix + 'Eni' + NodeNumber:
     """
     instances = []
+    instance_ids = []
     enis = []
 
     iam_instance_profile = If(
@@ -565,6 +568,7 @@ def add_nodes(
 
         enis.append(eni)
         instances.append(instance)
+        instance_ids.append(Ref(instance.title))
 
     instances[0].UserData = Base64(
         Join('', generate_node1_user_data(instances, chassis_spec))
@@ -618,6 +622,13 @@ def add_nodes(
 
     template.add_output(
         Output(
+            'ClusterInstanceIDs',
+            Description='List of the instance IDs of the nodes in your Qumulo Cluster',
+            Value=json_format_list_of_strings(instance_ids),
+        )
+    )
+    template.add_output(
+        Output(
             'ClusterPrivateIPs',
             Description='List of the primary private IPs of the nodes in your Qumulo Cluster',
             Value=json_format_list_of_strings(output_primary_ips),
@@ -633,10 +644,17 @@ def add_nodes(
         )
     template.add_output(
         Output(
+            'SecurityGroup',
+            Description='The security group being used by the cluster network interfaces',
+            Value=security_group,
+        )
+    )
+    template.add_output(
+        Output(
             'TemporaryPassword',
             Description='Temporary admin password for your Qumulo cluster '
             '(exclude quotes, matches node1 instance ID).',
-            Value=json_format_string(Ref(instances[0].title)),
+            Value=json_format_string(instance_ids[0]),
         )
     )
     template.add_output(
