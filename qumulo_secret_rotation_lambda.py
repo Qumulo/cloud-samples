@@ -33,7 +33,7 @@ from typing import Any, Dict, Optional
 
 import boto3
 
-from qumulo.rest_client import RestClient
+import qumulo.rest_client
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -314,7 +314,7 @@ def get_connection(secret_dict: Dict[str, str]) -> Optional[Any]:
     """
     try:
         # Log into Qumulo cluster using the host specified in the secret.
-        rc = RestClient(secret_dict['host'], 8000)
+        rc = qumulo.rest_client.RestClient(secret_dict['host'], 8000)
         rc.login(secret_dict['username'], secret_dict['password'])
         return rc
     except Exception as e:
