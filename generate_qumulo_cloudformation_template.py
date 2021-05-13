@@ -358,7 +358,7 @@ def add_params(template, add_ingress_cidr_param):
         )
         parameter_labels[sg_cidr.title] = {'default': 'Security group IPv4 CIDR block'}
 
-    template.add_metadata(
+    template.set_metadata(
         Interface(ParameterGroups=parameter_groups, ParameterLabels=parameter_labels,)
     )
 
