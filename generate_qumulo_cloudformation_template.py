@@ -86,8 +86,8 @@ class ChassisSpec:
         self.working_spec = working_spec
         self.backing_spec = backing_spec
 
-        self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
-        self.backing_volume_count = self.working_volume_count * self.pairing_ratio
+        self.working_volume_count = int(self.volume_count / (self.pairing_ratio + 1))
+        self.backing_volume_count = int(self.working_volume_count * self.pairing_ratio)
         assert (
             self.volume_count == self.working_volume_count + self.backing_volume_count
         ), 'Not all volumes can be used based on the pairing ratio'
