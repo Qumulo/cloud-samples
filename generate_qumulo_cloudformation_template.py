@@ -698,7 +698,7 @@ def create_qumulo_cft(
     the number of nodes requested.
     """
     template = Template()
-    template.add_description(
+    template.set_description(
         'Qumulo for AWS has the highest performance of any file storage system '
         'in the public cloud and a complete set of enterprise features, such '
         'as support for SMB, real-time visibility into the storage system, '
