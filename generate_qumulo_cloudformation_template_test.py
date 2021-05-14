@@ -1,17 +1,13 @@
 import os
 import json
 import unittest
-from unittest.mock import call, patch, MagicMock
 
-from typing import Any, Dict, Optional
-
-from troposphere import Template
+from troposphere import ec2, Template
 
 from generate_qumulo_cloudformation_template import *
 
-@patch('troposphere.ec2.EBSBlockDevice')
 class ChassisSpecTest(unittest.TestCase):
-    def test_init(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_init(self) -> None:
         spec = ChassisSpec(
             volume_count=20,
             pairing_ratio=4,
@@ -21,7 +17,7 @@ class ChassisSpecTest(unittest.TestCase):
         self.assertEqual(spec.working_volume_count, 4)
         self.assertEqual(spec.backing_volume_count, 16)
 
-    def test_init_no_backing_spec(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_init_no_backing_spec(self) -> None:
         spec = ChassisSpec(
             volume_count=5,
             pairing_ratio=0,
@@ -31,7 +27,7 @@ class ChassisSpecTest(unittest.TestCase):
         self.assertEqual(spec.working_volume_count, 5)
         self.assertEqual(spec.backing_volume_count, 0)
 
-    def test_init_too_many_volumes(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_init_too_many_volumes(self) -> None:
         with self.assertRaisesRegex(AssertionError, 'Too many volumes specified'):
             ChassisSpec(
                 volume_count=26,
@@ -41,7 +37,7 @@ class ChassisSpecTest(unittest.TestCase):
             )
 
 
-    def test_init_bad_pairing_ratio(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_init_bad_pairing_ratio(self) -> None:
         with self.assertRaisesRegex(AssertionError, 'Not all volumes can be used'):
             ChassisSpec(
                 volume_count=10,
@@ -51,7 +47,7 @@ class ChassisSpecTest(unittest.TestCase):
             )
 
 
-    def test_init_need_backing_spec(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_init_need_backing_spec(self) -> None:
         with self.assertRaisesRegex(AssertionError, 'Backing volumes require'):
             ChassisSpec(
                 volume_count=10,
@@ -60,7 +56,7 @@ class ChassisSpecTest(unittest.TestCase):
                 backing_spec=None,
             )
 
-    def test_from_json(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_from_json(self) -> None:
         json_spec = {
             'slot_count': 12,
             'pairing_ratio': 2,
@@ -71,14 +67,7 @@ class ChassisSpecTest(unittest.TestCase):
         self.assertEqual(spec.working_volume_count, 4)
         self.assertEqual(spec.backing_volume_count, 8)
 
-    @patch('troposphere.ec2.BlockDeviceMapping')
-    def test_get_block_device_mappings(
-        self, mock_ebs_block_device: MagicMock, mock_ebs_block_device_mapping: MagicMock
-    ) -> None:
-        def make_block_device_mapping(DeviceName, Ebs):
-            return { DeviceName: Ebs}
-        mock_ebs_block_device.side_effect = make_block_device_mapping
-
+    def test_get_block_device_mappings(self) -> None:
         spec = ChassisSpec(
             volume_count=2,
             pairing_ratio=1,
@@ -88,10 +77,10 @@ class ChassisSpecTest(unittest.TestCase):
         mappings = spec.get_block_device_mappings()
 
         self.assertEqual(len(mappings), 3)
-        devices = [list(mapping.keys())[0] for mapping in mappings]
+        devices = [mapping.to_dict()['DeviceName'] for mapping in mappings]
         self.assertEqual(devices, ['/dev/sda1', '/dev/xvdb', '/dev/xvdc'])
         
-    def test_get_slot_specs(self, mock_ebs_block_device: MagicMock) -> None:
+    def test_get_slot_specs(self) -> None:
         spec = ChassisSpec(
             volume_count=2,
             pairing_ratio=1,
@@ -167,11 +156,7 @@ class TemplateTest(unittest.TestCase):
 
 class GenerateUserDataTest(unittest.TestCase):
     def test_generate_node1_user_data(self) -> None:
-        instance1 = MagicMock()
-        instance1.title = 't1'
-        instance2 = MagicMock()
-        instance2.title = 't2'
-        instances = [instance1, instance2]
+        instances = [ec2.Instance('t1'), ec2.Instance('t2')]
 
         spec = ChassisSpec(
             volume_count=2,
