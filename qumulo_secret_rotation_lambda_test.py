@@ -169,3 +169,6 @@ class GetSecretDictTest(unittest.TestCase):
 
         with self.assertRaisesRegex(KeyError, 'password key is missing'):
             get_secret_dict(mock_service_client, arn='arn', stage='AWSPENDING')
+
+if __name__ == '__main__':
+    unittest.main()

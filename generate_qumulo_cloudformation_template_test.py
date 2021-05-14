@@ -291,3 +291,5 @@ class GenerateQumuloCloudformationTemplateTest(unittest.TestCase):
         with self.assertRaisesRegex(NoBackingVolumesException, 'The backing volumes'):
             generate_qcft(2, self.file_path, 'st1', 'ami-123')
 
+if __name__ == '__main__':
+    unittest.main()
