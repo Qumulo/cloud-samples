@@ -86,8 +86,8 @@ class ChassisSpec:
         self.working_spec = working_spec
         self.backing_spec = backing_spec
 
-        self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
-        self.backing_volume_count = self.working_volume_count * self.pairing_ratio
+        self.working_volume_count = int(self.volume_count / (self.pairing_ratio + 1))
+        self.backing_volume_count = int(self.working_volume_count * self.pairing_ratio)
         assert (
             self.volume_count == self.working_volume_count + self.backing_volume_count
         ), 'Not all volumes can be used based on the pairing ratio'
@@ -358,7 +358,7 @@ def add_params(template, add_ingress_cidr_param):
         )
         parameter_labels[sg_cidr.title] = {'default': 'Security group IPv4 CIDR block'}
 
-    template.add_metadata(
+    template.set_metadata(
         Interface(ParameterGroups=parameter_groups, ParameterLabels=parameter_labels,)
     )
 
@@ -698,7 +698,7 @@ def create_qumulo_cft(
     the number of nodes requested.
     """
     template = Template()
-    template.add_description(
+    template.set_description(
         'Qumulo for AWS has the highest performance of any file storage system '
         'in the public cloud and a complete set of enterprise features, such '
         'as support for SMB, real-time visibility into the storage system, '
