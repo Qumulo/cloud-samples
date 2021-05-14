@@ -7,7 +7,7 @@ favorite orchestration technology.
 ## CloudFormation
 https://aws.amazon.com/cloudformation/
 
-`generate-qumulo-cloudformation-template.py` is a python script that generates
+`generate_qumulo_cloudformation_template.py` is a python script that generates
 an AWS CloudFormation template (CFT) with the desired number of nodes and
 instance names. The CFT that is generated will contain a preconfigured AWS
 Security Group that enables the cluster to serve clients as well as opens
