@@ -80,7 +80,7 @@ class ChassisSpec:
         self.working_spec = working_spec
         self.backing_spec = backing_spec
 
-        self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
+        self.working_volume_count = self.volume_count // (self.pairing_ratio + 1)
         self.backing_volume_count = self.working_volume_count * self.pairing_ratio
         assert (
             self.volume_count == self.working_volume_count + self.backing_volume_count
@@ -547,7 +547,7 @@ def add_nodes(
     template.add_output(
         Output(
             'ClusterInstanceIDs',
-            Description='List of the instanceIDs of the nodes in your Qumulo Cluster',
+            Description='List of the instance IDs of the nodes in your Qumulo Cluster',
             Value=json_format_list_of_strings(instance_ids),
         )
     )
