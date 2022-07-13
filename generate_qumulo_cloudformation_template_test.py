@@ -79,7 +79,7 @@ class ChassisSpecTest(unittest.TestCase):
         self.assertEqual(len(mappings), 3)
         devices = [mapping.to_dict()['DeviceName'] for mapping in mappings]
         self.assertEqual(devices, ['/dev/sda1', '/dev/xvdb', '/dev/xvdc'])
-        
+
     def test_get_slot_specs(self) -> None:
         spec = ChassisSpec(
             volume_count=2,
@@ -109,7 +109,7 @@ class TemplateTest(unittest.TestCase):
         add_conditions(template)
         self.assertEqual(
             list(template.conditions.keys()),
-            ['HasEncryptionKey', 'HasIamInstanceProfile', 'HasInstanceRecoveryTopic']
+            ['HasEncryptionKey', 'HasIamInstanceProfile']
         )
 
     def test_add_params_with_ingress_cidr_param(self) -> None:
@@ -117,7 +117,7 @@ class TemplateTest(unittest.TestCase):
         add_params(template, True)
         expected_parameters = [
             'ClusterName', 'KeyName', 'InstanceType', 'VpcId', 'SubnetId', 'SgCidr',
-            'VolumesEncryptionKey', 'IamInstanceProfile', 'InstanceRecoveryTopic'
+            'VolumesEncryptionKey', 'IamInstanceProfile'
         ]
         self.assertEqual(list(template.parameters.keys()), expected_parameters)
 
@@ -126,25 +126,9 @@ class TemplateTest(unittest.TestCase):
         add_params(template, False)
         expected_parameters = [
             'ClusterName', 'KeyName', 'InstanceType', 'VpcId', 'SubnetId',
-            'VolumesEncryptionKey', 'IamInstanceProfile', 'InstanceRecoveryTopic'
+            'VolumesEncryptionKey', 'IamInstanceProfile'
         ]
         self.assertEqual(list(template.parameters.keys()), expected_parameters)
-
-    def test_add_ami_map(self) -> None:
-        template = Template()
-        add_ami_map(template, 'ami-1234')
-        expected_mapping = {
-            'us-east-1': {'AMI': 'ami-1234'},
-            'us-east-2': {'AMI': 'ami-1234'},
-            'us-west-1': {'AMI': 'ami-1234'},
-            'us-west-2': {'AMI': 'ami-1234'},
-            'ca-central-1': {'AMI': 'ami-1234'},
-            'eu-central-1': {'AMI': 'ami-1234'},
-            'eu-west-1': {'AMI': 'ami-1234'},
-            'eu-west-2': {'AMI': 'ami-1234'},
-            'eu-west-3': {'AMI': 'ami-1234'},
-        }
-        self.assertEqual(template.mappings['RegionMap'], expected_mapping)
 
     def test_add_security_group(self) -> None:
         template = Template()
@@ -197,29 +181,28 @@ class AddNodesTest(unittest.TestCase):
             'testEni1',
             'testEni2',
             'testNode1',
-            'testNode2',
-            'CWRecoveryAlarmtestNode1',
-            'CWRecoveryAlarmtestNode2'
+            'testNode2'
         ]
         self.expected_outputs = [
             'ClusterInstanceIDs',
             'ClusterPrivateIPs',
             'SecurityGroup',
             'TemporaryPassword',
-            'LinkToManagement',
-            'QumuloKnowledgeBase'
+            'LinkToManagement'
         ]
 
     def test_nodes_no_secondary_ips(self) -> None:
         template = Template()
-        add_nodes(template, 2, 'test', self.spec, 0, 'sg-9')
+        launch_template = ec2.LaunchTemplate('title')
+        add_nodes(template, launch_template, 'test', 2, self.spec, 0, 'sg-9')
 
         self.assertEqual(list(template.resources.keys()), self.expected_resources)
         self.assertEqual(list(template.outputs.keys()), self.expected_outputs)
 
     def test_nodes_has_secondary_ips(self) -> None:
         template = Template()
-        add_nodes(template, 2, 'test', self.spec, 1, 'sg-9')
+        launch_template = ec2.LaunchTemplate('title')
+        add_nodes(template, launch_template, 'test', 2, self.spec, 1, 'sg-9')
 
         self.assertEqual(list(template.resources.keys()), self.expected_resources)
 
@@ -245,7 +228,7 @@ class GenerateQumuloCloudformationTemplateTest(unittest.TestCase):
         with open(self.file_path, 'w+') as config_file:
             config_file.write(json_config)
 
-        template = generate_qcft(2, self.file_path, 'st1', 'ami-123')
+        template = generate_qcft(2, self.file_path, 'st1', 'region', 'ami-123')
         self.assertIsNotNone(template)
 
     def test_generate_qcft_no_override(self) -> None:
@@ -259,9 +242,9 @@ class GenerateQumuloCloudformationTemplateTest(unittest.TestCase):
         with open(self.file_path, 'w+') as config_file:
             config_file.write(json_config)
 
-        template = generate_qcft(2, self.file_path, None, 'ami-123')
+        template = generate_qcft(2, self.file_path, None, 'region', 'ami-123')
         self.assertIsNotNone(template)
-    
+
 
     def test_generate_qcft_bad_override(self) -> None:
         config = {
@@ -274,7 +257,7 @@ class GenerateQumuloCloudformationTemplateTest(unittest.TestCase):
             config_file.write(json_config)
 
         with self.assertRaisesRegex(NoBackingVolumesException, 'The backing volumes'):
-            generate_qcft(2, self.file_path, 'st1', 'ami-123')
+            generate_qcft(2, self.file_path, 'st1', 'region', 'ami-123')
 
 if __name__ == '__main__':
     unittest.main()

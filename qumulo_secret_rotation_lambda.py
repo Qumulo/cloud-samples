@@ -20,8 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# qumulo_python_versions = { 3 }
-
 # derived from AWS Secrets Manager Rotation Lambda Template on GitHub at
 # https://github.com/aws-samples/aws-secrets-manager-rotation-lambdas/
 
@@ -33,7 +31,7 @@ from typing import Any, Dict, Optional
 
 import boto3
 
-import qumulo.rest_client
+from qumulo.rest_client import RestClient
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -75,35 +73,22 @@ def lambda_handler(event: Dict[str, str], _context: Any) -> None:
     # Make sure the version is staged correctly
     metadata = service_client.describe_secret(SecretId=arn)
     if not metadata['RotationEnabled']:
-        logger.error('Secret {} is not enabled for rotation'.format(arn))
-        raise ValueError('Secret {} is not enabled for rotation'.format(arn))
+        logger.error(f'Secret {arn} is not enabled for rotation')
+        raise ValueError(f'Secret {arn} is not enabled for rotation')
 
     versions = metadata['VersionIdsToStages']
     if token not in versions:
-        logger.error(
-            'Secret version {} has no stage for rotation of secret {}.'
-            ''.format(token, arn)
-        )
-        raise ValueError(
-            'Secret version {} has no stage for rotation of secret {}.'
-            ''.format(token, arn)
-        )
+        logger.error(f'Secret version {token} has no stage for rotation of secret {arn}.')
+        raise ValueError(f'Secret version {token} has no stage for rotation of secret {arn}.')
 
     if 'AWSCURRENT' in versions[token]:
-        logger.info(
-            'Secret version {} already set as AWSCURRENT for secret {}.'
-            ''.format(token, arn)
-        )
+        logger.info(f'Secret version {token} already set as AWSCURRENT for secret {arn}.')
         return
 
     elif 'AWSPENDING' not in versions[token]:
-        logger.error(
-            'Secret version {} not set as AWSPENDING for rotation of secret {}.'
-            ''.format(token, arn)
-        )
+        logger.error(f'Secret version {token} not set as AWSPENDING for rotation of secret {arn}.')
         raise ValueError(
-            'Secret version {} not set as AWSPENDING for rotation of secret {}.'
-            ''.format(token, arn)
+            f'Secret version {token} not set as AWSPENDING for rotation of secret {arn}.'
         )
 
     if step == 'createSecret':
@@ -147,7 +132,7 @@ def create_secret(service_client: Any, arn: str, token: str) -> None:
     # Now try to get the secret version, if that fails, put a new secret
     try:
         get_secret_dict(service_client, arn, 'AWSPENDING')
-        logger.info('createSecret: Successfully retrieved secret for {}.'.format(arn))
+        logger.info(f'createSecret: Successfully retrieved secret for {arn}.')
     except service_client.exceptions.ResourceNotFoundException:
         # Generate a random password
         passwd = service_client.get_random_password(ExcludeCharacters="/@\"'\\")
@@ -161,10 +146,7 @@ def create_secret(service_client: Any, arn: str, token: str) -> None:
             SecretString=new_secret,
             VersionStages=['AWSPENDING'],
         )
-        logger.info(
-            'createSecret: Successfully put secret for ARN {} and version {}.'
-            ''.format(arn, token)
-        )
+        logger.info(f'createSecret: Successfully put secret for ARN {arn} and version {token}.')
 
 
 def set_secret(service_client: Any, arn: str, token: str) -> None:
@@ -217,10 +199,11 @@ def set_secret(service_client: Any, arn: str, token: str) -> None:
 
     # Now set the password to the pending password
     resp = conn.auth.change_password(current_password, pending_dict['password'])
-    logger.info('setSecret: {}'.format(resp))
+    logger.info(f'setSecret: {resp}')
     logger.info(
-        'setSecret: Successfully set password for user {} in Qumulo for secret'
-        ' arn {}.'.format(pending_dict['username'], arn)
+        'setSecret: Successfully set password for user {} in Qumulo for secret arn {}.'.format(
+            pending_dict['username'], arn
+        )
     )
 
 
@@ -245,21 +228,14 @@ def test_secret(service_client: Any, arn: str, token: str) -> None:
         # Validate that the Qumulo API can be queried.
         conn.fs.read_fs_stats()
 
-        logger.info(
-            'testSecret: Successfully signed into Qumulo with AWSPENDING '
-            'secret in {}.'.format(arn)
-        )
+        logger.info(f'testSecret: Successfully signed into Qumulo with AWSPENDING secret in {arn}.')
         return
 
     else:
         logger.error(
-            'testSecret: Unable to log into Qumulo with pending secret of '
-            'secret ARN {}'.format(arn)
+            f'testSecret: Unable to log into Qumulo with pending secret of secret ARN {arn}'
         )
-        raise ValueError(
-            'Unable to log into Qumulo with pending secret of '
-            'secret ARN {}'.format(arn)
-        )
+        raise ValueError(f'Unable to log into Qumulo with pending secret of secret ARN {arn}')
 
 
 def finish_secret(service_client: Any, arn: str, token: str) -> None:
@@ -288,8 +264,9 @@ def finish_secret(service_client: Any, arn: str, token: str) -> None:
             if version == token:
                 # The correct version is already marked as current, return
                 logger.info(
-                    'finishSecret: Version {} already marked as AWSCURRENT '
-                    'for {}'.format(version, arn)
+                    'finishSecret: Version {} already marked as AWSCURRENT for {}'.format(
+                        version, arn
+                    )
                 )
                 return
             current_version = version
@@ -303,8 +280,9 @@ def finish_secret(service_client: Any, arn: str, token: str) -> None:
         RemoveFromVersionId=current_version,
     )
     logger.info(
-        'finishSecret: Successfully set AWSCURRENT stage to version {} for '
-        'secret {}.'.format(current_version, arn)
+        'finishSecret: Successfully set AWSCURRENT stage to version {} for secret {}.'.format(
+            current_version, arn
+        )
     )
 
 
@@ -314,16 +292,16 @@ def get_connection(secret_dict: Dict[str, str]) -> Optional[Any]:
     """
     try:
         # Log into Qumulo cluster using the host specified in the secret.
-        rc = qumulo.rest_client.RestClient(secret_dict['host'], 8000)
+        rc = RestClient(secret_dict['host'], 8000)
         rc.login(secret_dict['username'], secret_dict['password'])
         return rc
     except Exception as e:
-        logger.info('get_connection: {}'.format(e))
+        logger.info(f'get_connection: {e}')
         return None
 
 
 def get_secret_dict(
-    service_client: Any, arn: str, stage: str, token: str = None
+    service_client: Any, arn: str, stage: str, token: Optional[str] = None
 ) -> Dict[str, str]:
     """Gets the secret dictionary corresponding for the secret arn, stage, and
     token
@@ -350,9 +328,7 @@ def get_secret_dict(
 
     # Only do VersionId validation against the stage if a token is passed in
     if token:
-        secret = service_client.get_secret_value(
-            SecretId=arn, VersionId=token, VersionStage=stage
-        )
+        secret = service_client.get_secret_value(SecretId=arn, VersionId=token, VersionStage=stage)
     else:
         secret = service_client.get_secret_value(SecretId=arn, VersionStage=stage)
 
@@ -360,12 +336,12 @@ def get_secret_dict(
     try:
         secret_dict = json.loads(plaintext)
     except Exception as e:
-        raise Exception('get_secret_dict: {}, {}'.format(plaintext, e))
+        raise Exception(f'get_secret_dict: {plaintext}, {e}')
 
     # Run validations against the secret
     for field in required_fields:
         if field not in secret_dict:
-            raise KeyError('{} key is missing from secret JSON'.format(field))
+            raise KeyError(f'{field} key is missing from secret JSON')
 
     # Parse and return the secret JSON string
     return secret_dict
