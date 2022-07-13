@@ -20,8 +20,8 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
-
-# qumulo_python_versions = { 3 }
+# qumulo_outside_qinternal = customer
+# qumulo_pyz_allow_shebang
 # mypy: ignore-errors
 
 """
@@ -42,7 +42,6 @@ os.environ['TROPO_REAL_BOOL'] = 'true'
 from troposphere import (
     AWSAttribute,
     Base64,
-    cloudwatch,
     ec2,
     Equals,
     FindInMap,
@@ -53,31 +52,26 @@ from troposphere import (
     Output,
     Parameter,
     Ref,
-    Sub,
     Template,
 )
-
 
 # NOTE: Use only public packages.
 
 SECURITY_GROUP_NAME = 'QumuloSecurityGroup'
 SECURITY_GROUP_DEFAULT_CIDR = '0.0.0.0/0'
-KNOWLEDGE_BASE_LINK = 'https://qf2.co/cloud-kb'
 CLUSTER_NAME_PATTERN = r'^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$'
 CIDR_PATTERN = (
     r'^('
-    '([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}'  # (0-255).(0-255).(0-255).
+    r'([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}'  # (0-255).(0-255).(0-255).
     '([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])'  # (0-255)
-    '(\/(3[0-2]|[1-2][0-9]|[0-9])'  # /(0-32)
+    r'(\/(3[0-2]|[1-2][0-9]|[0-9])'  # /(0-32)
     ')$'
 )
 GIBIBYTE = 1024 ** 3
 
 
 class ChassisSpec:
-    def __init__(
-        self, volume_count, pairing_ratio, working_spec, backing_spec,
-    ):
+    def __init__(self, volume_count, pairing_ratio, working_spec, backing_spec):
 
         assert volume_count <= 25, 'Too many volumes specified'
 
@@ -86,8 +80,8 @@ class ChassisSpec:
         self.working_spec = working_spec
         self.backing_spec = backing_spec
 
-        self.working_volume_count = int(self.volume_count / (self.pairing_ratio + 1))
-        self.backing_volume_count = int(self.working_volume_count * self.pairing_ratio)
+        self.working_volume_count = self.volume_count / (self.pairing_ratio + 1)
+        self.backing_volume_count = self.working_volume_count * self.pairing_ratio
         assert (
             self.volume_count == self.working_volume_count + self.backing_volume_count
         ), 'Not all volumes can be used based on the pairing ratio'
@@ -100,18 +94,14 @@ class ChassisSpec:
             self.backing_device = ec2.EBSBlockDevice(
                 **self.backing_spec,
                 Encrypted=True,
-                KmsKeyId=If(
-                    'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
-                ),
+                KmsKeyId=If('HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')),
             )
 
         self.working_volume_size = self.working_spec['VolumeSize']
         self.working_device = ec2.EBSBlockDevice(
             **self.working_spec,
             Encrypted=True,
-            KmsKeyId=If(
-                'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
-            ),
+            KmsKeyId=If('HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')),
         )
 
     @staticmethod
@@ -126,19 +116,17 @@ class ChassisSpec:
 
     def _device_name_from_slot_index(self, slot_index):
         letter = chr(ord('b') + slot_index)
-        return '/dev/xvd{}'.format(letter)
+        return f'/dev/xvd{letter}'
 
     def get_block_device_mappings(self):
         """Create a troposphere mapping for each device"""
         mappings = [
-            ec2.BlockDeviceMapping(
+            ec2.LaunchTemplateBlockDeviceMapping(
                 DeviceName='/dev/sda1',
                 Ebs=ec2.EBSBlockDevice(
                     Encrypted=True,
                     KmsKeyId=If(
-                        'HasEncryptionKey',
-                        Ref('VolumesEncryptionKey'),
-                        Ref('AWS::NoValue'),
+                        'HasEncryptionKey', Ref('VolumesEncryptionKey'), Ref('AWS::NoValue')
                     ),
                 ),
             )
@@ -151,7 +139,9 @@ class ChassisSpec:
             else:
                 device = self.backing_device
 
-            mappings.append(ec2.BlockDeviceMapping(DeviceName=device_name, Ebs=device))
+            mappings.append(
+                ec2.LaunchTemplateBlockDeviceMapping(DeviceName=device_name, Ebs=device)
+            )
 
         return mappings
 
@@ -168,13 +158,7 @@ class ChassisSpec:
                 disk_role = 'backing'
                 disk_size = self.backing_volume_size * GIBIBYTE
 
-            slots.append(
-                {
-                    'drive_bay': device_name,
-                    'disk_role': disk_role,
-                    'disk_size': disk_size,
-                }
-            )
+            slots.append({'drive_bay': device_name, 'disk_role': disk_role, 'disk_size': disk_size})
 
         return {'slot_specs': slots}
 
@@ -182,25 +166,12 @@ class ChassisSpec:
 class Interface(AWSAttribute):
     dictname = 'AWS::CloudFormation::Interface'
 
-    props = {
-        'ParameterGroups': ([dict], True),
-        'ParameterLabels': (dict, True),
-    }
+    props = {'ParameterGroups': ([dict], True), 'ParameterLabels': (dict, True)}
 
 
 def add_conditions(template):
-    """
-    Add HasEncryptionKey, HasIamInstanceProfile, and HasInstanceRecoveryTopic conditions to the template.
-    """
-    template.add_condition(
-        'HasEncryptionKey', Not(Equals(Ref('VolumesEncryptionKey'), ''))
-    )
-    template.add_condition(
-        'HasIamInstanceProfile', Not(Equals(Ref('IamInstanceProfile'), ''))
-    )
-    template.add_condition(
-        'HasInstanceRecoveryTopic', Not(Equals(Ref('InstanceRecoveryTopic'), ''))
-    )
+    template.add_condition('HasEncryptionKey', Not(Equals(Ref('VolumesEncryptionKey'), '')))
+    template.add_condition('HasIamInstanceProfile', Not(Equals(Ref('IamInstanceProfile'), '')))
 
 
 def add_params(template, add_ingress_cidr_param):
@@ -214,15 +185,16 @@ def add_params(template, add_ingress_cidr_param):
         MinLength=2,
         MaxLength=15,
         AllowedPattern=CLUSTER_NAME_PATTERN,
-        ConstraintDescription='Name must be an alpha-numeric string between 2 and 15'
-        ' characters. Dash (-) is allowed if not the first or last character.',
+        ConstraintDescription=(
+            'Name must be an alpha-numeric string between 2 and 15'
+            ' characters. Dash (-) is allowed if not the first or last character.'
+        ),
     )
     template.add_parameter(cluster_name)
 
     key_name = Parameter(
         'KeyName',
-        Description='Name of an existing EC2 KeyPair to enable SSH '
-        'access to the node',
+        Description='Name of an existing EC2 KeyPair to enable SSH access to the node',
         Type='AWS::EC2::KeyPair::KeyName',
     )
     template.add_parameter(key_name)
@@ -245,6 +217,14 @@ def add_params(template, add_ingress_cidr_param):
             'c5n.4xlarge',
             'c5n.9xlarge',
             'c5n.18xlarge',
+            'm6i.xlarge',
+            'm6i.2xlarge',
+            'm6i.4xlarge',
+            'm6i.8xlarge',
+            'm6i.12xlarge',
+            'm6i.16xlarge',
+            'm6i.24xlarge',
+            'm6i.32xlarge',
         ],
         ConstraintDescription='Must be a Qumulo supported EC2 instance type.',
     )
@@ -279,8 +259,9 @@ def add_params(template, add_ingress_cidr_param):
             ),
             Type='String',
             AllowedPattern=CIDR_PATTERN,
-            ConstraintDescription='Must be specified as an IPv4 address followed '
-            'by / and a subnet mask of 0-32.',
+            ConstraintDescription=(
+                'Must be specified as an IPv4 address followed by / and a subnet mask of 0-32.'
+            ),
         )
         template.add_parameter(sg_cidr)
 
@@ -309,17 +290,6 @@ def add_params(template, add_ingress_cidr_param):
     )
     template.add_parameter(iam_instance_profile)
 
-    instance_recovery_topic = Parameter(
-        'InstanceRecoveryTopic',
-        Type='String',
-        Default='',
-        Description=(
-            'Optionally enter the ARN of an SNS topic that receives messages when an '
-            'instance alarm is triggered.'
-        ),
-    )
-    template.add_parameter(instance_recovery_topic)
-
     parameter_groups = [
         {
             'Label': {'default': 'Amazon EC2 Configuration'},
@@ -330,14 +300,7 @@ def add_params(template, add_ingress_cidr_param):
                 iam_instance_profile.title,
             ],
         },
-        {
-            'Label': {'default': 'Qumulo Configuration'},
-            'Parameters': [cluster_name.title,],
-        },
-        {
-            'Label': {'default': 'SNS Configuration'},
-            'Parameters': [instance_recovery_topic.title,],
-        },
+        {'Label': {'default': 'Qumulo Configuration'}, 'Parameters': [cluster_name.title]},
     ]
     parameter_labels = {
         instance_type.title: {'default': 'EC2 instance type'},
@@ -346,8 +309,7 @@ def add_params(template, add_ingress_cidr_param):
         subnet_id.title: {'default': 'Subnet ID in the VPC'},
         cluster_name.title: {'default': 'Qumulo cluster name'},
         volumes_encryption_key.title: {'default': 'EBS volumes encryption key ID'},
-        instance_recovery_topic.title: {'default': 'Instance recovery alarm SNS topic'},
-        iam_instance_profile.title: {'default': 'IAM Instance Profile',},
+        iam_instance_profile.title: {'default': 'IAM Instance Profile'},
     }
     if sg_cidr:
         parameter_groups.append(
@@ -359,28 +321,7 @@ def add_params(template, add_ingress_cidr_param):
         parameter_labels[sg_cidr.title] = {'default': 'Security group IPv4 CIDR block'}
 
     template.set_metadata(
-        Interface(ParameterGroups=parameter_groups, ParameterLabels=parameter_labels,)
-    )
-
-
-def add_ami_map(template, ami_id):
-    """
-    Takes a given Template object and AMI ID then creates the Region
-    to AMI ID map which is referenced by the add_nodes function.
-    """
-    template.add_mapping(
-        'RegionMap',
-        {
-            'us-east-1': {'AMI': ami_id},
-            'us-east-2': {'AMI': ami_id},
-            'us-west-1': {'AMI': ami_id},
-            'us-west-2': {'AMI': ami_id},
-            'ca-central-1': {'AMI': ami_id},
-            'eu-central-1': {'AMI': ami_id},
-            'eu-west-1': {'AMI': ami_id},
-            'eu-west-2': {'AMI': ami_id},
-            'eu-west-3': {'AMI': ami_id},
-        },
+        Interface(ParameterGroups=parameter_groups, ParameterLabels=parameter_labels)
     )
 
 
@@ -414,7 +355,7 @@ def add_security_group(template):
     for port, protocol in tcp_ports:
         sg_in.append(
             ec2.SecurityGroupRule(
-                Description='TCP ports for {}'.format(protocol),
+                Description=f'TCP ports for {protocol}',
                 IpProtocol='tcp',
                 FromPort=port,
                 ToPort=port,
@@ -427,7 +368,7 @@ def add_security_group(template):
     for port, protocol in udp_ports:
         sg_in.append(
             ec2.SecurityGroupRule(
-                Description='UDP port for {}'.format(protocol),
+                Description=f'UDP port for {protocol}',
                 IpProtocol='udp',
                 FromPort=port,
                 ToPort=port,
@@ -449,8 +390,9 @@ def add_security_group(template):
     template.add_resource(
         ec2.SecurityGroup(
             SECURITY_GROUP_NAME,
-            GroupDescription='Enable ports for NFS/SMB/FTP/SSH, Management, '
-            'Replication, and Clustering.',
+            GroupDescription=(
+                'Enable ports for NFS/SMB/FTP/SSH, Management, Replication, and Clustering.'
+            ),
             SecurityGroupIngress=sg_in,
             SecurityGroupEgress=sg_out,
             VpcId=Ref('VpcId'),
@@ -479,9 +421,7 @@ def format_slot_specs(slot_specs_json):
     return json.dumps(slot_specs_json, indent=4).split('\n')
 
 
-def generate_node1_user_data(
-    instances, chassis_spec, get_ip_ref=None, cluster_name_ref=None
-):
+def generate_node1_user_data(instances, chassis_spec, get_ip_ref=None, cluster_name_ref=None):
 
     if get_ip_ref is None:
         get_ip_ref = lambda instance_name: GetAtt(instance_name, 'PrivateIp')
@@ -511,10 +451,7 @@ def generate_node1_user_data(
 
 
 def generate_other_nodes_user_data(chassis_spec):
-    user_data = [
-        '{',
-        '"spec_info": ',
-    ]
+    user_data = ['{', '"spec_info": ']
 
     user_data += format_slot_specs(chassis_spec.get_slot_specs())
     user_data.append('}')
@@ -522,8 +459,32 @@ def generate_other_nodes_user_data(chassis_spec):
     return user_data
 
 
+def node_launch_template(template, prefix, chassis_spec):
+    iam_instance_profile = If(
+        'HasIamInstanceProfile',
+        ec2.IamInstanceProfile(f'{prefix}IamInstanceProfile', Name=Ref('IamInstanceProfile')),
+        Ref('AWS::NoValue'),
+    )
+    block_device_mappings = chassis_spec.get_block_device_mappings()
+    launch_template_data = ec2.LaunchTemplateData(
+        f'{prefix}LaunchTemplateData',
+        ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'AMI'),
+        InstanceType=Ref('InstanceType'),
+        KeyName=Ref('KeyName'),
+        BlockDeviceMappings=block_device_mappings,
+        EbsOptimized=True,
+        IamInstanceProfile=iam_instance_profile,
+    )
+    launch_template = ec2.LaunchTemplate(
+        f'{prefix}LaunchTemplate', LaunchTemplateData=launch_template_data
+    )
+    template.add_resource(launch_template)
+
+    return launch_template.title
+
+
 def add_nodes(
-    template, num_nodes, prefix, chassis_spec, secondary_ip_count, security_group
+    template, launch_template, prefix, num_nodes, chassis_spec, secondary_ip_count, security_group
 ):
     """
     Takes a given Template object, an count of nodes to create, and a name to
@@ -538,79 +499,42 @@ def add_nodes(
     instance_ids = []
     enis = []
 
-    iam_instance_profile = If(
-        'HasIamInstanceProfile', Ref('IamInstanceProfile'), Ref('AWS::NoValue'),
+    launch_spec = ec2.LaunchTemplateSpecification(
+        f'{prefix}LaunchSpec',
+        LaunchTemplateId=Ref(launch_template),
+        Version=GetAtt(launch_template, 'LatestVersionNumber'),
     )
 
-    block_device_mappings = chassis_spec.get_block_device_mappings()
     for node_number in range(1, num_nodes + 1):
         eni = ec2.NetworkInterface(
-            '{}Eni{}'.format(prefix, node_number),
+            f'{prefix}Eni{node_number}',
             GroupSet=[security_group],
             SubnetId=Ref('SubnetId'),
             SecondaryPrivateIpAddressCount=secondary_ip_count,
         )
+        enis.append(eni)
         template.add_resource(eni)
 
-        eni_prop = ec2.NetworkInterfaceProperty(
-            DeviceIndex='0', NetworkInterfaceId=Ref(eni.title),
-        )
+        eni_prop = ec2.NetworkInterfaceProperty(DeviceIndex='0', NetworkInterfaceId=Ref(eni.title))
         instance = ec2.Instance(
-            '{}Node{}'.format(prefix, node_number),
-            ImageId=FindInMap('RegionMap', Ref('AWS::Region'), 'AMI'),
-            InstanceType=Ref('InstanceType'),
-            KeyName=Ref('KeyName'),
+            f'{prefix}Node{node_number}',
+            LaunchTemplate=launch_spec,
             NetworkInterfaces=[eni_prop],
-            BlockDeviceMappings=block_device_mappings,
+            # The LaunchTemplate version of EbsOptimized does not seem to be effective.
+            # ec2.Instance().ebs_optimized is False without this.
             EbsOptimized=True,
-            IamInstanceProfile=iam_instance_profile,
         )
 
-        enis.append(eni)
         instances.append(instance)
         instance_ids.append(Ref(instance.title))
 
-    instances[0].UserData = Base64(
-        Join('', generate_node1_user_data(instances, chassis_spec))
-    )
+    instances[0].UserData = Base64(Join('', generate_node1_user_data(instances, chassis_spec)))
 
     for instance in instances[1:]:
-        instance.UserData = Base64(
-            Join('', generate_other_nodes_user_data(chassis_spec))
-        )
+        instance.UserData = Base64(Join('', generate_other_nodes_user_data(chassis_spec)))
 
     for instance in instances:
         template.add_resource(instance)
-
-    instance_recovery_topic = If(
-        'HasInstanceRecoveryTopic', Ref('InstanceRecoveryTopic'), Ref('AWS::NoValue'),
-    )
-
-    for i, instance in enumerate(instances):
-        template.add_resource(
-            cloudwatch.Alarm(
-                'CWRecoveryAlarm{}'.format(instance.name),
-                AlarmActions=[
-                    Sub('arn:aws:automate:${AWS::Region}:ec2:recover'),
-                    instance_recovery_topic,
-                ],
-                AlarmDescription=Sub(
-                    'Automatic recovery alarm for ${{ClusterName}}-{}'.format(i + 1)
-                ),
-                ComparisonOperator='GreaterThanOrEqualToThreshold',
-                DatapointsToAlarm=2,
-                Dimensions=[
-                    cloudwatch.MetricDimension(Name='InstanceId', Value=Ref(instance))
-                ],
-                EvaluationPeriods=2,
-                MetricName='StatusCheckFailed_System',
-                Namespace='AWS/EC2',
-                OKActions=[instance_recovery_topic],
-                Period=60,
-                Statistic='Maximum',
-                Threshold=1.0,
-            )
-        )
 
     # Create lists containing the Primary and Secondary Private IPs of all nodes.
     output_primary_ips = []
@@ -623,7 +547,7 @@ def add_nodes(
     template.add_output(
         Output(
             'ClusterInstanceIDs',
-            Description='List of the instance IDs of the nodes in your Qumulo Cluster',
+            Description='List of the instanceIDs of the nodes in your Qumulo Cluster',
             Value=json_format_list_of_strings(instance_ids),
         )
     )
@@ -652,8 +576,10 @@ def add_nodes(
     template.add_output(
         Output(
             'TemporaryPassword',
-            Description='Temporary admin password for your Qumulo cluster '
-            '(exclude quotes, matches node1 instance ID).',
+            Description=(
+                'Temporary admin password for your Qumulo cluster '
+                '(exclude quotes, matches node1 instance ID).'
+            ),
             Value=json_format_string(instance_ids[0]),
         )
     )
@@ -662,13 +588,6 @@ def add_nodes(
             'LinkToManagement',
             Description='Use to launch the Qumulo Admin Console',
             Value=Join('', ['https://', GetAtt(instances[0].title, 'PrivateIp')]),
-        )
-    )
-    template.add_output(
-        Output(
-            'QumuloKnowledgeBase',
-            Description='Knowledge Base for Qumulo in public clouds',
-            Value=KNOWLEDGE_BASE_LINK,
         )
     )
 
@@ -688,6 +607,7 @@ def json_format_list_of_strings(l):
 def create_qumulo_cft(
     num_nodes,
     node_name_prefix,
+    region,
     ami_id,
     chassis_spec,
     secondary_ip_count=0,
@@ -707,14 +627,21 @@ def create_qumulo_cft(
     add_conditions(template)
     add_ingress_cidr_param = security_group is None
     add_params(template, add_ingress_cidr_param)
-    add_ami_map(template, ami_id)
+
+    # Uploading a generated template to the AWS marketplace will cause the RegionMap to be
+    # overwritten with the regions supported by the marketplace offer with the AMIs created by the
+    # marketplace.
+    template.add_mapping('RegionMap', {region: {'AMI': ami_id}})
 
     security_group = security_group or add_security_group(template)
 
+    launch_template = node_launch_template(template, node_name_prefix, chassis_spec)
+
     add_nodes(
         template,
-        num_nodes,
+        launch_template,
         node_name_prefix,
+        num_nodes,
         chassis_spec,
         secondary_ip_count,
         security_group,
@@ -727,9 +654,7 @@ def parse_args(argv):
         formatter_class=argparse.ArgumentDefaultsHelpFormatter, description=__doc__
     )
 
-    parser.add_argument(
-        '--num-nodes', type=int, help='Number of nodes in the cluster', default=4
-    )
+    parser.add_argument('--num-nodes', type=int, help='Number of nodes in the cluster', default=4)
 
     parser.add_argument(
         '--config-file',
@@ -741,7 +666,7 @@ def parse_args(argv):
     parser.add_argument(
         '--backing-volume-type-override',
         type=str,
-        choices=['sc1', 'st1', 'gp2'],
+        choices=['sc1', 'st1', 'gp2', 'gp3'],
         help='Override type of EBS volumes for backing storage.',
     )
 
@@ -758,9 +683,8 @@ def parse_args(argv):
         help='Specify an existing security group for all network interfaces to use.',
     )
 
-    parser.add_argument(
-        '--ami-id', type=str, required=True, help='AMI ID in deployment region'
-    )
+    parser.add_argument('--region', type=str, required=True, help='Region to deploy template into')
+    parser.add_argument('--ami-id', type=str, required=True, help='AMI ID in deployment region')
 
     return parser.parse_args(argv)
 
@@ -782,6 +706,7 @@ def generate_qcft(
     num_nodes,
     config_file,
     backing_volume_type_override,
+    region,
     ami_id,
     secondary_ip_count=0,
     security_group=None,
@@ -794,7 +719,7 @@ def generate_qcft(
 
     chassis_spec = ChassisSpec.from_json(json_spec)
     return create_qumulo_cft(
-        num_nodes, 'Qumulo', ami_id, chassis_spec, secondary_ip_count, security_group
+        num_nodes, 'Qumulo', region, ami_id, chassis_spec, secondary_ip_count, security_group
     )
 
 
@@ -804,6 +729,7 @@ def main(argv):
         options.num_nodes,
         options.config_file,
         options.backing_volume_type_override,
+        options.region,
         options.ami_id,
         options.secondary_ip_count,
         options.security_group,
