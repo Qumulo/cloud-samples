@@ -91,26 +91,6 @@ class TestSecretTest(unittest.TestCase):
             test_secret(service_client=MagicMock(), arn='arn', token='token')
 
 
-@patch('qumulo.rest_client.RestClient')
-class GetConnectionTest(unittest.TestCase):
-    def test_login_succeeds(self, rest_client_mock: MagicMock) -> None:
-        rest_client_mock.return_value = rest_client_mock
-
-        secret_dict = { 'host': 'host', 'username': 'admin', 'password': '123' }
-        rc = get_connection(secret_dict)
-
-        self.assertEqual(rest_client_mock.login.call_args[0], ('admin', '123'))
-        self.assertEqual(rc, rest_client_mock)
-
-    def test_login_fails(self, rest_client_mock: MagicMock) -> None:
-        rest_client_mock.return_value = rest_client_mock
-
-        # This will fail because there is no host
-        secret_dict = { 'username': 'admin', 'password': '123' }
-        rc = get_connection(secret_dict)
-
-        self.assertIsNone(rc)
-
 class GetSecretDictTest(unittest.TestCase):
     def test_success_no_token(self) -> None:
         mock_service_client = MagicMock()
