@@ -54,6 +54,9 @@ from troposphere import (
     Ref,
     Template,
 )
+from troposphere.cloudformation import AWSCustomObject
+from troposphere.iam import InstanceProfile, Policy, Role
+from troposphere.s3 import Bucket
 
 # NOTE: Use only public packages.
 
@@ -174,7 +177,7 @@ def add_conditions(template):
     template.add_condition('HasIamInstanceProfile', Not(Equals(Ref('IamInstanceProfile'), '')))
 
 
-def add_params(template, add_ingress_cidr_param):
+def add_params(template, add_ingress_cidr_param, tiered):
     """
     Takes a given Template object and adds parameters for user configuration
     """
@@ -199,33 +202,49 @@ def add_params(template, add_ingress_cidr_param):
     )
     template.add_parameter(key_name)
 
+    instance_types = [
+        'm5.xlarge',
+        'm5.2xlarge',
+        'm5.4xlarge',
+        'm5.8xlarge',
+        'm5.12xlarge',
+        'm5.16xlarge',
+        'm5.24xlarge',
+        'c5n.xlarge',
+        'c5n.2xlarge',
+        'c5n.4xlarge',
+        'c5n.9xlarge',
+        'c5n.18xlarge',
+        'm6i.xlarge',
+        'm6i.2xlarge',
+        'm6i.4xlarge',
+        'm6i.8xlarge',
+        'm6i.12xlarge',
+        'm6i.16xlarge',
+        'm6i.24xlarge',
+        'm6i.32xlarge',
+    ]
+
+    if tiered is True:
+        instance_types.extend(
+            [
+                'i4i.xlarge',
+                'i4i.2xlarge',
+                'i4i.4xlarge',
+                'i4i.8xlarge',
+                'i4i.12xlarge',
+                'i4i.16xlarge',
+                'i4i.24xlarge',
+                'i4i.32xlarge',
+            ]
+        )
+
     instance_type = Parameter(
         'InstanceType',
         Description='EC2 instance type for Qumulo node',
         Type='String',
         Default='m5.4xlarge',
-        AllowedValues=[
-            'm5.xlarge',
-            'm5.2xlarge',
-            'm5.4xlarge',
-            'm5.8xlarge',
-            'm5.12xlarge',
-            'm5.16xlarge',
-            'm5.24xlarge',
-            'c5n.xlarge',
-            'c5n.2xlarge',
-            'c5n.4xlarge',
-            'c5n.9xlarge',
-            'c5n.18xlarge',
-            'm6i.xlarge',
-            'm6i.2xlarge',
-            'm6i.4xlarge',
-            'm6i.8xlarge',
-            'm6i.12xlarge',
-            'm6i.16xlarge',
-            'm6i.24xlarge',
-            'm6i.32xlarge',
-        ],
+        AllowedValues=instance_types,
         ConstraintDescription='Must be a Qumulo supported EC2 instance type.',
     )
     template.add_parameter(instance_type)
@@ -421,7 +440,15 @@ def format_slot_specs(slot_specs_json):
     return json.dumps(slot_specs_json, indent=4).split('\n')
 
 
-def generate_node1_user_data(instances, chassis_spec, get_ip_ref=None, cluster_name_ref=None):
+def generate_node1_user_data(
+    instances,
+    chassis_spec,
+    region,
+    bucket_name_ref=None,
+    capacity_clamp=None,
+    get_ip_ref=None,
+    cluster_name_ref=None,
+):
 
     if get_ip_ref is None:
         get_ip_ref = lambda instance_name: GetAtt(instance_name, 'PrivateIp')
@@ -445,7 +472,17 @@ def generate_node1_user_data(instances, chassis_spec, get_ip_ref=None, cluster_n
 
     user_data += user_data_node_ips
 
-    user_data += ['"cluster_name": "', cluster_name_ref, '" }']
+    user_data += ['"cluster_name": "', cluster_name_ref, '"']
+
+    if bucket_name_ref:
+        object_storage_uri_body = Join('.', [bucket_name_ref, 's3', region, 'amazonaws', 'com/'])
+        object_storage_uri = Join('', ['https://', object_storage_uri_body])
+        user_data += [', ', '"object_storage_uris": ["', object_storage_uri, '"]']
+
+    if capacity_clamp:
+        user_data += ['"capacity_clamp": "', capacity_clamp, '"']
+
+    user_data += '}'
 
     return user_data
 
@@ -483,8 +520,23 @@ def node_launch_template(template, prefix, chassis_spec):
     return launch_template.title
 
 
+class DeleteS3BucketObjects(AWSCustomObject):
+    resource_type = 'Custom::DeleteS3BucketObjects'
+
+    props = {'ServiceToken': (str, True), 'BucketName': (str, True)}
+
+
 def add_nodes(
-    template, launch_template, prefix, num_nodes, chassis_spec, secondary_ip_count, security_group
+    template,
+    launch_template,
+    prefix,
+    num_nodes,
+    chassis_spec,
+    secondary_ip_count,
+    security_group,
+    tiered,
+    region,
+    capacity_clamp,
 ):
     """
     Takes a given Template object, an count of nodes to create, and a name to
@@ -498,6 +550,78 @@ def add_nodes(
     instances = []
     instance_ids = []
     enis = []
+
+    iam_instance_profile = None
+    bucket_name_ref = None
+    if tiered is True:
+        s3bucket = template.add_resource(Bucket('ObjectTierBucket'))
+        template.add_output(
+            Output(
+                'ObjectTierBucketName',
+                Value=Ref(s3bucket),
+                Description='Name of the S3 bucket to hold object tier data',
+            )
+        )
+
+        bucket_name_ref = Ref(s3bucket)
+
+        # Need to trigger a lambda to delete all objects in the bucket before we can delete it
+        template.add_resource(
+            DeleteS3BucketObjects(
+                'DeleteS3BucketObjects',
+                ServiceToken='arn:aws:lambda:us-west-2:343459513285:function:EmptyS3Bucket',
+                BucketName=Ref(s3bucket),
+            )
+        )
+
+        access_s3_bucket_role = template.add_resource(
+            Role(
+                'AccessS3BucketRole',
+                AssumeRolePolicyDocument={
+                    'Version': '2012-10-17',
+                    'Statement': [
+                        {
+                            'Effect': 'Allow',
+                            'Action': 'sts:AssumeRole',
+                            'Principal': {'Service': ['ec2.amazonaws.com']},
+                        }
+                    ],
+                },
+                Policies=[
+                    Policy(
+                        PolicyName='inline_policy_AccessS3BucketRole',
+                        PolicyDocument={
+                            'Id': 'inline_policy_AccessS3BucketRole',
+                            'Version': '2012-10-17',
+                            'Statement': [
+                                {
+                                    'Effect': 'Allow',
+                                    'Action': [
+                                        's3:PutObject',
+                                        's3:GetObject',
+                                        's3:DeleteObject',
+                                        's3:ListBucket',
+                                    ],
+                                    'Resource': [
+                                        {'Fn::GetAtt': ['ObjectTierBucket', 'Arn']},
+                                        {
+                                            'Fn::Join': [
+                                                '/',
+                                                [{'Fn::GetAtt': ['ObjectTierBucket', 'Arn']}, '*'],
+                                            ]
+                                        },
+                                    ],
+                                }
+                            ],
+                        },
+                    )
+                ],
+            )
+        )
+
+        iam_instance_profile = template.add_resource(
+            InstanceProfile('AccessS3BucketInstanceProfile', Roles=[Ref(access_s3_bucket_role)])
+        )
 
     launch_spec = ec2.LaunchTemplateSpecification(
         f'{prefix}LaunchSpec',
@@ -525,10 +649,20 @@ def add_nodes(
             EbsOptimized=True,
         )
 
+        if iam_instance_profile:
+            instance.IamInstanceProfile = Ref(iam_instance_profile)
+
         instances.append(instance)
         instance_ids.append(Ref(instance.title))
 
-    instances[0].UserData = Base64(Join('', generate_node1_user_data(instances, chassis_spec)))
+    instances[0].UserData = Base64(
+        Join(
+            '',
+            generate_node1_user_data(
+                instances, chassis_spec, region, bucket_name_ref, capacity_clamp
+            ),
+        )
+    )
 
     for instance in instances[1:]:
         instance.UserData = Base64(Join('', generate_other_nodes_user_data(chassis_spec)))
@@ -612,6 +746,8 @@ def create_qumulo_cft(
     chassis_spec,
     secondary_ip_count=0,
     security_group=None,
+    tiered=False,
+    capacity_clamp=None,
 ):
     """
     This function will return a completed Template object fully configured with
@@ -626,7 +762,7 @@ def create_qumulo_cft(
     )
     add_conditions(template)
     add_ingress_cidr_param = security_group is None
-    add_params(template, add_ingress_cidr_param)
+    add_params(template, add_ingress_cidr_param, tiered)
 
     # Uploading a generated template to the AWS marketplace will cause the RegionMap to be
     # overwritten with the regions supported by the marketplace offer with the AMIs created by the
@@ -645,6 +781,9 @@ def create_qumulo_cft(
         chassis_spec,
         secondary_ip_count,
         security_group,
+        tiered,
+        region,
+        capacity_clamp,
     )
     return template
 
@@ -710,6 +849,8 @@ def generate_qcft(
     ami_id,
     secondary_ip_count=0,
     security_group=None,
+    tiered=False,
+    capacity_clamp=None,
 ):
     with open(config_file) as json_file:
         json_spec = json.load(json_file)
@@ -719,7 +860,15 @@ def generate_qcft(
 
     chassis_spec = ChassisSpec.from_json(json_spec)
     return create_qumulo_cft(
-        num_nodes, 'Qumulo', region, ami_id, chassis_spec, secondary_ip_count, security_group
+        num_nodes,
+        'Qumulo',
+        region,
+        ami_id,
+        chassis_spec,
+        secondary_ip_count,
+        security_group,
+        tiered,
+        capacity_clamp,
     )
 
 
