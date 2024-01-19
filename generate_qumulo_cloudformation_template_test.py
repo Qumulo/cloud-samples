@@ -114,7 +114,7 @@ class TemplateTest(unittest.TestCase):
 
     def test_add_params_with_ingress_cidr_param(self) -> None:
         template = Template()
-        add_params(template, True)
+        add_params(template, True, False)
         expected_parameters = [
             'ClusterName', 'KeyName', 'InstanceType', 'VpcId', 'SubnetId', 'SgCidr',
             'VolumesEncryptionKey', 'IamInstanceProfile'
@@ -123,7 +123,7 @@ class TemplateTest(unittest.TestCase):
 
     def test_add_params_without_ingress_cidr_param(self) -> None:
         template = Template()
-        add_params(template, False)
+        add_params(template, False, False)
         expected_parameters = [
             'ClusterName', 'KeyName', 'InstanceType', 'VpcId', 'SubnetId',
             'VolumesEncryptionKey', 'IamInstanceProfile'
@@ -149,7 +149,7 @@ class GenerateUserDataTest(unittest.TestCase):
             backing_spec={'VolumeSize': 5},
         )
         user_data = generate_node1_user_data(
-            instances, spec, get_ip_ref=lambda x: x, cluster_name_ref='nameref'
+            instances, spec, '', get_ip_ref=lambda x: x, cluster_name_ref='nameref'
         )
 
         self.assertIn('t2', user_data)
@@ -194,7 +194,7 @@ class AddNodesTest(unittest.TestCase):
     def test_nodes_no_secondary_ips(self) -> None:
         template = Template()
         launch_template = ec2.LaunchTemplate('title')
-        add_nodes(template, launch_template, 'test', 2, self.spec, 0, 'sg-9')
+        add_nodes(template, launch_template, 'test', 2, self.spec, 0, 'sg-9', False, '', None)
 
         self.assertEqual(list(template.resources.keys()), self.expected_resources)
         self.assertEqual(list(template.outputs.keys()), self.expected_outputs)
@@ -202,7 +202,7 @@ class AddNodesTest(unittest.TestCase):
     def test_nodes_has_secondary_ips(self) -> None:
         template = Template()
         launch_template = ec2.LaunchTemplate('title')
-        add_nodes(template, launch_template, 'test', 2, self.spec, 1, 'sg-9')
+        add_nodes(template, launch_template, 'test', 2, self.spec, 1, 'sg-9', False, '', None)
 
         self.assertEqual(list(template.resources.keys()), self.expected_resources)
 
